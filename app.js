@@ -382,7 +382,9 @@ window.renderCharts = function(aggregatedData, diseaseFilter, periodValue) {
     const chartContainer = d3.select('#reportCharts');
     chartContainer.html(''); // Clear previous charts
 
-    const locationTotals = [];
+    // 1. Data for the Multi-level Donut Chart (Location & Sex)
+    const donutData = [];
+    // 2. Data for the Stacked Bar Chart (Age & Sex)
     const ageIntervalTotals = AGE_INTERVALS.map(int => ({ 
         interval: int.replace(/_/g, '-').replace('plus', '+'), 
         M: 0, 
@@ -392,25 +394,26 @@ window.renderCharts = function(aggregatedData, diseaseFilter, periodValue) {
 
     window.LOCATIONS.forEach(location => {
         const locationId = location.replace(/[^a-zA-Z0-9]/g, '_');
-        let locTotal = 0;
+        let locTotalM = 0;
+        let locTotalF = 0;
         
         AGE_INTERVALS.forEach((interval, index) => {
-            // Note: Data fetching from aggregatedData relies on the `report_` prefix, 
-            // but since aggregatedData is just the data object, we can directly access it.
             const mCount = aggregatedData[locationId]?.[`M_${interval}`] || 0;
             const fCount = aggregatedData[locationId]?.[`F_${interval}`] || 0;
             
-            locTotal += mCount + fCount;
+            locTotalM += mCount;
+            locTotalF += fCount;
             ageIntervalTotals[index].M += mCount;
             ageIntervalTotals[index].F += fCount;
         });
         
-        if (locTotal > 0) {
-            // Use only the Commune/Secteur name for cleaner chart labels
+        if (locTotalM > 0 || locTotalF > 0) {
             const locName = location.split(':').length > 1 ? location.split(':')[1].trim() : location;
-            locationTotals.push({ location: locName, total: locTotal });
+            
+            donutData.push({ location: locName, sex: 'M', total: locTotalM });
+            donutData.push({ location: locName, sex: 'F', total: locTotalF });
         }
-        grandTotal += locTotal;
+        grandTotal += locTotalM + locTotalF;
     });
     
     // Update the total count display
@@ -423,16 +426,267 @@ window.renderCharts = function(aggregatedData, diseaseFilter, periodValue) {
     
     const title = `${diseaseFilter === 'all' ? 'All Diseases' : diseaseFilter.replace(/_/g, ' ')} Report for ${periodValue.replace(/_/g, ' - ')}`;
 
-    // 1. Pictorial Fraction Chart (Donut Chart)
-    if (locationTotals.length > 0) {
-        renderPieChart(chartContainer, locationTotals, grandTotal, title);
+    // Use a flex container to hold the charts
+    const chartsRow = chartContainer.append('div').attr('class', 'flex flex-wrap justify-center items-start w-full');
+
+    // 1. Multi-level Donut Chart (Location and Sex)
+    if (donutData.length > 0) {
+        renderMultiLevelDonutChart(chartsRow, donutData.filter(d => d.total > 0), grandTotal, title);
     }
 
     // 2. Layered Area Chart (Stacked Bar Chart for categorical data)
     if (ageIntervalTotals.some(d => d.M > 0 || d.F > 0)) {
-        renderStackedBarChart(chartContainer, ageIntervalTotals, title);
+        renderStackedBarChart(chartsRow, ageIntervalTotals, title);
     }
 };
+
+/**
+ * Renders the Multi-level Donut Chart (Location & Sex Distribution)
+ */
+function renderMultiLevelDonutChart(container, data, total, title) {
+    const width = 450, height = 450, margin = 20;
+    const innerRadius = 80;
+    const middleRadius = 130;
+    const outerRadius = 180;
+    const chartSize = Math.min(width, height);
+
+    const chartDiv = container.append('div')
+        .attr('class', 'p-4 bg-white rounded-xl shadow-lg m-4 w-full md:w-[480px]');
+    
+    chartDiv.append('h3').attr('class', 'text-lg font-bold text-center mb-1 text-gray-800').text('Distribution by Location and Sex');
+    chartDiv.append('p').attr('class', 'text-sm text-center text-gray-600 mb-4').text(title);
+
+
+    const svg = chartDiv.append('svg')
+        .attr('viewBox', `0 0 ${width} ${height}`)
+        .attr('width', '100%')
+        .attr('height', '100%')
+        .append('g')
+        .attr('transform', `translate(${chartSize / 2}, ${chartSize / 2})`);
+
+    // Group data by location for the inner ring
+    const locationTotals = d3.rollups(data, v => d3.sum(v, d => d.total), d => d.location)
+        .map(([location, total]) => ({ location, total }));
+    
+    const locationColorScale = d3.scaleOrdinal(d3.schemePaired);
+    const sexColorScale = d3.scaleOrdinal().domain(['M', 'F']).range(['#3b82f6', '#f472b6']);
+    
+    // --- Inner Ring (Locations) ---
+    const pieInner = d3.pie()
+        .value(d => d.total)
+        .sort(null);
+
+    const arcInner = d3.arc()
+        .innerRadius(innerRadius)
+        .outerRadius(middleRadius);
+
+    const slicesInner = svg.selectAll('.slice-inner')
+        .data(pieInner(locationTotals))
+        .enter()
+        .append('g')
+        .attr('class', 'slice-inner');
+
+    slicesInner.append('path')
+        .attr('d', arcInner)
+        .attr('fill', d => locationColorScale(d.data.location))
+        .attr('stroke', 'white')
+        .style('stroke-width', '1px')
+        .append('title')
+        .text(d => `${d.data.location}: ${d.data.total} cases (${d3.format(".1%")(d.data.total / total)})`);
+
+    // --- Outer Ring (Sex Breakdown) ---
+    const pieOuter = d3.pie()
+        .value(d => d.total)
+        .sort(null);
+
+    const arcOuter = d3.arc()
+        .innerRadius(middleRadius + 5)
+        .outerRadius(outerRadius);
+
+    svg.selectAll('.slice-outer')
+        .data(pieOuter(data))
+        .enter()
+        .append('path')
+        .attr('d', arcOuter)
+        .attr('fill', d => sexColorScale(d.data.sex))
+        .attr('stroke', 'white')
+        .style('stroke-width', '1px')
+        .append('title')
+        .text(d => `${d.data.location} (${d.data.sex}): ${d.data.total} cases (${d3.format(".1%")(d.data.total / total)})`);
+
+    // --- Center Label ---
+    svg.append("text")
+        .attr("text-anchor", "middle")
+        .attr("dominant-baseline", "middle")
+        .style("font-size", "1.5rem")
+        .style("font-weight", "bold")
+        .attr("fill", "#1f2937")
+        .text(total);
+
+    // --- Legend (Location & Sex) ---
+    const legend = svg.append('g').attr('transform', `translate(${outerRadius + 30}, ${-outerRadius})`);
+    
+    // 1. Location Legend
+    locationTotals.forEach((d, i) => {
+        const legendRow = legend.append('g').attr('transform', `translate(0, ${i * 20})`);
+        legendRow.append('rect')
+            .attr('width', 10).attr('height', 10)
+            .attr('fill', locationColorScale(d.location)).attr('rx', 2);
+        legendRow.append('text')
+            .attr('x', 15).attr('y', 10).style('font-size', '11px')
+            .text(d.location);
+    });
+
+    // 2. Sex Legend (below location)
+    const sexLegend = svg.append('g').attr('transform', `translate(${outerRadius + 30}, ${-outerRadius + locationTotals.length * 20 + 10})`);
+    sexLegend.append('text').attr('x', 0).attr('y', 0).style('font-weight', 'bold').style('font-size', '12px').text("Sex:");
+    
+    ['M', 'F'].forEach((key, i) => {
+        const legendRow = sexLegend.append('g').attr('transform', `translate(${i * 60}, 15)`);
+        legendRow.append('rect')
+            .attr('width', 10).attr('height', 10)
+            .attr('fill', sexColorScale(key)).attr('rx', 2);
+        legendRow.append('text')
+            .attr('x', 15).attr('y', 10).style('font-size', '11px')
+            .text(key === 'M' ? 'Male' : 'Female');
+    });
+}
+
+
+/**
+ * Renders the Stacked Bar Chart (Age and Sex Distribution)
+ * (No change needed here based on request, but included for completeness)
+ */
+function renderStackedBarChart(container, data, title) {
+    const margin = { top: 30, right: 30, bottom: 80, left: 60 };
+    const chartWidth = 650; 
+    const chartHeight = 450;
+    const width = chartWidth - margin.left - margin.right;
+    const height = chartHeight - margin.top - margin.bottom;
+
+    const keys = ['M', 'F'];
+    
+    const chartDiv = container.append('div')
+        .attr('class', 'p-4 bg-white rounded-xl shadow-lg m-4 w-full md:w-[700px]');
+
+    chartDiv.append('h3').attr('class', 'text-lg font-bold text-center mb-1 text-gray-800').text('Age and Sex Distribution');
+    chartDiv.append('p').attr('class', 'text-sm text-center text-gray-600 mb-4').text(title);
+
+    const svg = chartDiv.append('svg')
+        .attr('viewBox', `0 0 ${chartWidth} ${chartHeight}`)
+        .attr('width', '100%')
+        .attr('height', '100%')
+        .append('g')
+        .attr('transform', `translate(${margin.left}, ${margin.top})`);
+
+    // Data processing for stacking
+    const stack = d3.stack().keys(keys).order(d3.stackOrderNone).offset(d3.stackOffsetNone);
+    const stackedData = stack(data);
+
+    // Scales
+    const x = d3.scaleBand()
+        .domain(data.map(d => d.interval))
+        .range([0, width])
+        .padding(0.2);
+
+    const yMax = d3.max(stackedData[stackedData.length - 1], d => d[1]);
+    const y = d3.scaleLinear()
+        .domain([0, yMax * 1.1])
+        .range([height, 0]);
+
+    const color = d3.scaleOrdinal()
+        .domain(keys)
+        .range(['#3b82f6', '#f472b6']); 
+
+    // Axes
+    svg.append('g')
+        .attr('transform', `translate(0,${height})`)
+        .call(d3.axisBottom(x))
+        .selectAll("text")
+        .style("text-anchor", "end")
+        .attr("dx", "-.8em")
+        .attr("dy", ".15em")
+        .attr("transform", "rotate(-45)");
+
+    svg.append('g')
+        .call(d3.axisLeft(y).ticks(5).tickFormat(d3.format("d"))); 
+
+    // Y-Axis Label
+    svg.append("text")
+        .attr("transform", "rotate(-90)")
+        .attr("y", 0 - margin.left + 5)
+        .attr("x", 0 - (height / 2))
+        .attr("dy", "1em")
+        .style("text-anchor", "middle")
+        .style("font-size", "12px")
+        .text("Total Cases");
+
+    // Bars
+    svg.selectAll('.layer')
+        .data(stackedData)
+        .enter().append('g')
+        .attr('class', 'layer')
+        .attr('fill', d => color(d.key))
+        .selectAll('rect')
+        .data(d => d)
+        .enter().append('rect')
+        .attr('x', d => x(d.data.interval))
+        .attr('y', d => y(d[1]))
+        .attr('height', d => y(d[0]) - y(d[1]))
+        .attr('width', x.bandwidth())
+        .attr('rx', 4) 
+        .append('title')
+        .text(d => `${d.data.interval} (${d3.select(this.parentNode).datum().key === 'M' ? 'Male' : 'Female'}): ${d[1] - d[0]} cases`);
+
+    // Legend
+    const legend = svg.append('g')
+        .attr('transform', `translate(${width - 100}, 0)`);
+
+    keys.forEach((key, i) => {
+        const legendRow = legend.append('g')
+            .attr('transform', `translate(0, ${i * 20})`);
+        
+        legendRow.append('rect')
+            .attr('width', 10)
+            .attr('height', 10)
+            .attr('fill', color(key))
+            .attr('rx', 2);
+
+        legendRow.append('text')
+            .attr('x', 15)
+            .attr('y', 10)
+            .style('font-size', '12px')
+            .text(key === 'M' ? 'Male' : 'Female');
+    });
+}
+
+// --- Data Aggregation Helpers ---
+
+function getAggregationMonths(type, periodValue) {
+      // periodValue format: YYYY-MM (monthly) or YYYY_ID (quarterly/yearly)
+      const parts = periodValue.split(/[-_]/);
+      const year = parts[0];
+      
+      let monthsToAggregate = [];
+      
+      if (type === 'monthly') {
+          // FIX: Correctly handle YYYY-MM format for monthly
+          const month = parts[1];
+          if (month) monthsToAggregate = [month];
+      } else {
+          const periodId = parts[1];
+          const periods = REPORT_PERIODS[type];
+          const periodsConfig = periods ? periods.find(p => p.id === periodId) : null;
+
+          if (periodsConfig) {
+              monthsToAggregate = periodsConfig.months;
+          }
+      }
+      
+      const fullMonthStrings = monthsToAggregate.map(m => `${year}-${m}`);
+
+      return { fullMonthStrings, year: year };
+}
 
 /**
  * Renders the Pie/Fraction Chart (Total Cases by Location)
@@ -508,134 +762,10 @@ function renderPieChart(container, data, total, title) {
         .text(total);
 }
 
-/**
- * Renders the Stacked Bar Chart (Age and Sex Distribution)
- */
-function renderStackedBarChart(container, data, title) {
-    const margin = { top: 30, right: 30, bottom: 60, left: 60 };
-    const chartWidth = 600; 
-    const chartHeight = 400;
-    const width = chartWidth - margin.left - margin.right;
-    const height = chartHeight - margin.top - margin.bottom;
-
-    const keys = ['M', 'F'];
-    
-    const chartDiv = container.append('div')
-        .attr('class', 'p-4 bg-white rounded-xl shadow-lg m-4 w-full md:w-[650px]');
-
-    chartDiv.append('h3').attr('class', 'text-lg font-bold text-center mb-1 text-gray-800').text('Age and Sex Distribution (Layered Area concept)');
-    chartDiv.append('p').attr('class', 'text-sm text-center text-gray-600 mb-4').text(title);
-
-    const svg = chartDiv.append('svg')
-        .attr('width', width + margin.left + margin.right)
-        .attr('height', height + margin.top + margin.bottom)
-        .append('g')
-        .attr('transform', `translate(${margin.left}, ${margin.top})`);
-
-    // Data processing for stacking
-    const stack = d3.stack().keys(keys).order(d3.stackOrderNone).offset(d3.stackOffsetNone);
-    const stackedData = stack(data);
-
-    // Scales
-    const x = d3.scaleBand()
-        .domain(data.map(d => d.interval))
-        .range([0, width])
-        .padding(0.2);
-
-    const yMax = d3.max(stackedData[stackedData.length - 1], d => d[1]);
-    const y = d3.scaleLinear()
-        .domain([0, yMax])
-        .range([height, 0]);
-
-    const color = d3.scaleOrdinal()
-        .domain(keys)
-        .range(['#3b82f6', '#f472b6']); // Blue for Male (M), Pink for Female (F)
-
-    // Axes
-    svg.append('g')
-        .attr('transform', `translate(0,${height})`)
-        .call(d3.axisBottom(x))
-        .selectAll("text")
-        .style("text-anchor", "end")
-        .attr("dx", "-.8em")
-        .attr("dy", ".15em")
-        .attr("transform", "rotate(-45)");
-
-    svg.append('g')
-        .call(d3.axisLeft(y).ticks(5));
-
-    // Y-Axis Label
-    svg.append("text")
-        .attr("transform", "rotate(-90)")
-        .attr("y", 0 - margin.left + 5)
-        .attr("x", 0 - (height / 2))
-        .attr("dy", "1em")
-        .style("text-anchor", "middle")
-        .style("font-size", "12px")
-        .text("Total Cases");
-
-    // Bars
-    svg.selectAll('.layer')
-        .data(stackedData)
-        .enter().append('g')
-        .attr('class', 'layer')
-        .attr('fill', d => color(d.key))
-        .selectAll('rect')
-        .data(d => d)
-        .enter().append('rect')
-        .attr('x', d => x(d.data.interval))
-        .attr('y', d => y(d[1]))
-        .attr('height', d => y(d[0]) - y(d[1]))
-        .attr('width', x.bandwidth())
-        .attr('rx', 4) // Rounded corners for aesthetics
-        .append('title')
-        .text(d => `${d.data.interval} (${d3.select(this.parentNode).datum().key === 'M' ? 'Male' : 'Female'}): ${d[1] - d[0]} cases`);
-
-    // Legend
-    const legend = svg.append('g')
-        .attr('transform', `translate(${width - 100}, 0)`);
-
-    keys.forEach((key, i) => {
-        const legendRow = legend.append('g')
-            .attr('transform', `translate(0, ${i * 20})`);
-        
-        legendRow.append('rect')
-            .attr('width', 10)
-            .attr('height', 10)
-            .attr('fill', color(key))
-            .attr('rx', 2);
-
-        legendRow.append('text')
-            .attr('x', 15)
-            .attr('y', 10)
-            .style('font-size', '12px')
-            .text(key === 'M' ? 'Male' : 'Female');
-    });
-}
 
 // --- Data Aggregation Helpers ---
 
-function getAggregationMonths(type, periodValue) {
-      const [yearStr, periodId] = periodValue.split('_');
-      const year = yearStr || periodValue.substring(0, 4); 
-      
-      let monthsToAggregate = [];
-      
-      if (type === 'monthly') {
-          monthsToAggregate = [periodValue.substring(5, 7)];
-      } else {
-          const periods = REPORT_PERIODS[type];
-          const periodsConfig = periods ? periods.find(p => p.id === periodId) : null;
 
-          if (periodsConfig) {
-              monthsToAggregate = periodsConfig.months;
-          }
-      }
-      
-      const fullMonthStrings = monthsToAggregate.map(m => `${year}-${m}`);
-
-      return { fullMonthStrings, year: year };
-}
 
 function aggregateData(fullMonthStrings, year, diseaseFilter) {
     const aggregated = {};
