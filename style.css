@@ -76,3 +76,78 @@ body {
     background-color: #f3f4f6;
     color: #6b7280;
 }
+
+        body {
+            background-color: #f8fafc; /* Slate-50 */
+            font-family: 'Inter', sans-serif;
+        }
+        .container {
+            max-width: 1200px;
+            margin: auto;
+        }
+        .tab-active {
+            border-bottom: 4px solid #f59e0b; /* Amber-500 */
+            color: #1e293b; /* Primary Dark */
+            font-weight: 600;
+        }
+        .tab-inactive {
+            border-bottom: 1px solid #e2e8f0; /* Slate-200 */
+            color: #64748b; /* Slate-500 */
+        }
+        .data-input {
+            width: 100%;
+            padding: 0px 4px;
+            text-align: center;
+            border: 1px solid #e2e8f0;
+            box-sizing: border-box;
+            background-color: #f9fafb;
+            height: 32px;
+            transition: all 0.1s;
+        }
+        .data-input:focus {
+            background-color: #fff;
+            border-color: #2563eb;
+            box-shadow: 0 0 0 1px #2563eb;
+        }
+        /* Style for fixed header columns */
+        .grid-container {
+            overflow-x: auto;
+        }
+        .data-table {
+            border-collapse: collapse;
+            min-width: 100%;
+        }
+        .data-table th, .data-table td {
+            border: 1px solid #cbd5e1; /* Slate-300 */
+            padding: 0px;
+            white-space: nowrap;
+        }
+        .data-table thead th {
+            padding: 8px 4px;
+            text-transform: uppercase;
+            font-size: 0.75rem;
+            letter-spacing: 0.05em;
+        }
+        .sticky-col {
+            position: sticky;
+            left: 0;
+            z-index: 10;
+            background-color: #e2e8f0; /* Light gray for contrast */
+            padding: 8px 12px;
+            text-align: left;
+            box-shadow: 2px 0 3px rgba(0, 0, 0, 0.1);
+        }
+        .data-table tfoot .sticky-col {
+             z-index: 20;
+        }
+        .header-bg-dark {
+            background-color: #334155; /* Slate-700 */
+            color: white;
+        }
+        .total-cell {
+            text-align: center;
+            font-weight: 700;
+            background-color: #fef08a; /* Yellow-200 */
+            color: #334155;
+            padding: 8px 4px;
+        }
