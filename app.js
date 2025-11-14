@@ -395,8 +395,10 @@ window.renderCharts = function(aggregatedData, diseaseFilter, periodValue) {
         let locTotal = 0;
         
         AGE_INTERVALS.forEach((interval, index) => {
-            const mCount = aggregatedData[locationId][`M_${interval}`] || 0;
-            const fCount = aggregatedData[locationId][`F_${interval}`] || 0;
+            // Note: Data fetching from aggregatedData relies on the `report_` prefix, 
+            // but since aggregatedData is just the data object, we can directly access it.
+            const mCount = aggregatedData[locationId]?.[`M_${interval}`] || 0;
+            const fCount = aggregatedData[locationId]?.[`F_${interval}`] || 0;
             
             locTotal += mCount + fCount;
             ageIntervalTotals[index].M += mCount;
@@ -497,7 +499,7 @@ function renderPieChart(container, data, total, title) {
         .text(d => `${d.data.location} (${d3.format(".1%")(d.data.total / total)})`);
     
     // Add total label in the center
-     svg.append("text")
+      svg.append("text")
         .attr("text-anchor", "middle")
         .attr("dominant-baseline", "middle")
         .style("font-size", "1.5rem")
@@ -678,7 +680,7 @@ function aggregateData(fullMonthStrings, year, diseaseFilter) {
     return aggregated;
 }
 
-// --- ADMIN TOOLS, GRID RENDERING, and CALCULATION LOGIC (Retained from previous working version) ---
+// --- ADMIN TOOLS, GRID RENDERING, and CALCULATION LOGIC ---
 
 window.renderConfigLists = function() {
     const diseaseListUl = document.getElementById('diseaseList');
@@ -819,9 +821,9 @@ window.renderGridStructure = function(tableId, isInput = true) {
     let html = '';
 
     if (window.LOCATIONS.length === 0) {
-          table.innerHTML = `<tr><td colspan="${(AGE_INTERVALS.length * 2) + 3}" class="text-center p-8 text-gray-500">
+          table.innerHTML = `<thead><tr><td colspan="${(AGE_INTERVALS.length * 2) + 3}" class="text-center p-8 text-gray-500">
             No locations defined. Please add locations in the Admin Tools section.
-          </td></tr>`;
+          </td></tr></thead>`;
           return;
     }
     
@@ -835,7 +837,7 @@ window.renderGridStructure = function(tableId, isInput = true) {
     });
     
     html += '<th colspan="2" class="bg-yellow-600 text-black">TOTAL</th>';
-    html += '<th rowspan="2" class="bg-yellow-700 text-black min-w-[100px]">TOTAL GÉNÉRAL</th>';
+    html += '<th rowspan="2" class="bg-yellow-700 text-black min-w-[100px] border-l-2 border-gray-400">TOTAL GÉNÉRAL</th>';
     html += '</tr>';
 
     html += '<tr class="text-center">';
@@ -865,9 +867,9 @@ window.renderGridStructure = function(tableId, isInput = true) {
             }
         });
 
-        html += `<td id="row_total_M_${locationId}_${tableId}" class="total-cell text-sm min-w-[50px]">0</td>`;
-        html += `<td id="row_total_F_${locationId}_${tableId}" class="total-cell text-sm min-w-[50px]">0</td>`;
-        html += `<td id="row_total_G_${locationId}_${tableId}" class="total-cell text-sm min-w-[100px] border-l-2 border-gray-400">0</td>`;
+        html += `<td id="row_total_M_${locationId}_${tableId}" class="total-cell text-sm min-w-[50px] font-bold">0</td>`;
+        html += `<td id="row_total_F_${locationId}_${tableId}" class="total-cell text-sm min-w-[50px] font-bold">0</td>`;
+        html += `<td id="row_total_G_${locationId}_${tableId}" class="total-cell text-sm min-w-[100px] border-l-2 border-gray-400 font-extrabold">0</td>`;
 
         html += '</tr>';
     });
@@ -878,12 +880,12 @@ window.renderGridStructure = function(tableId, isInput = true) {
     html += `<td class="sticky-col bg-yellow-500 text-black text-center text-base border-r-2 border-gray-400">TOTAL</td>`;
 
     AGE_INTERVALS.forEach(interval => {
-        html += `<td id="col_total_M_${interval}_${tableId}" class="total-cell bg-yellow-500">0</td>`;
-        html += `<td id="col_total_F_${interval}_${tableId}" class="total-cell bg-yellow-500">0</td>`;
+        html += `<td id="col_total_M_${interval}_${tableId}" class="total-cell bg-yellow-500 text-black">0</td>`;
+        html += `<td id="col_total_F_${interval}_${tableId}" class="total-cell bg-yellow-500 text-black">0</td>`;
     });
     
-    html += `<td id="grand_total_M_${tableId}" class="total-cell bg-yellow-600 text-black">0</td>`;
-    html += `<td id="grand_total_F_${tableId}" class="total-cell bg-yellow-600 text-black">0</td>`;
+    html += `<td id="grand_total_M_${tableId}" class="total-cell bg-yellow-600 text-black text-lg">0</td>`;
+    html += `<td id="grand_total_F_${tableId}" class="total-cell bg-yellow-600 text-black text-lg">0</td>`;
     html += `<td id="grand_total_G_${tableId}" class="total-cell bg-yellow-700 text-black text-xl border-l-2 border-gray-400">0</td>`;
 
     html += '</tr>';
@@ -912,37 +914,55 @@ window.clearGridInputs = function() {
 window.loadDataIntoGrid = function(data, tableId) {
     const isInput = tableId === 'dataGrid';
     
+    // 1. Clear previous data/inputs
     if (isInput) {
         window.clearGridInputs();
     } else {
+          // Clear all report data cells, but leave sticky columns and totals alone for now
           document.querySelectorAll('#reportGrid td').forEach(td => {
-            if (!td.classList.contains('sticky-col') && !td.classList.contains('total-cell')) {
-                td.textContent = '0';
+            if (td.id && (td.id.startsWith('report_') || td.id.startsWith('row_total_') || td.id.startsWith('col_total_') || td.id.startsWith('grand_total_'))) {
+                 // Check if it's a report data cell (e.g., report_loc_M_0_1)
+                 if (td.id.startsWith('report_')) {
+                    td.textContent = '0';
+                 }
             }
           });
     }
     
-    if (!data) return;
+    if (!data) {
+        window.calculateTotals(tableId);
+        return;
+    }
     
+    // 2. Populate new data
     window.LOCATIONS.forEach(location => {
         const locationKey = location.replace(/[^a-zA-Z0-9]/g, '_');
         const locationData = data[locationKey];
         
         if (locationData) {
-            for (const key in locationData) {
-                const value = parseInt(locationData[key] || 0, 10);
-                const safeValue = isNaN(value) ? 0 : value;
-
+            AGE_INTERVALS.forEach(interval => {
+                const keyM = `M_${interval}`;
+                const keyF = `F_${interval}`;
+                
+                const safeValueM = parseInt(locationData[keyM] || 0, 10);
+                const safeValueF = parseInt(locationData[keyF] || 0, 10);
+                
                 if (isInput) {
-                    const inputElement = document.getElementById(`input_${locationKey}_${key}`);
-                    if (inputElement) inputElement.value = safeValue;
+                    const inputElementM = document.getElementById(`input_${locationKey}_${keyM}`);
+                    const inputElementF = document.getElementById(`input_${locationKey}_${keyF}`);
+                    if (inputElementM) inputElementM.value = safeValueM;
+                    if (inputElementF) inputElementF.value = safeValueF;
                 } else {
-                    const cellElement = document.getElementById(`report_${locationKey}_${key}`);
-                    if (cellElement) cellElement.textContent = safeValue;
+                    const cellElementM = document.getElementById(`report_${locationKey}_${keyM}`);
+                    const cellElementF = document.getElementById(`report_${locationKey}_${keyF}`);
+                    if (cellElementM) cellElementM.textContent = safeValueM;
+                    if (cellElementF) cellElementF.textContent = safeValueF;
                 }
-            }
+            });
         }
     });
+    
+    // 3. Recalculate all totals
     window.calculateTotals(tableId); 
 };
 
@@ -1020,6 +1040,9 @@ window.collectGridData = function() {
         const locationId = location.replace(/[^a-zA-Z0-9]/g, '_');
         data[locationId] = {};
         
+        // Flag to track if this location has any non-zero data
+        let hasData = false;
+        
         AGE_INTERVALS.forEach(interval => {
             const keyM = `M_${interval}`;
             const keyF = `F_${interval}`;
@@ -1031,7 +1054,16 @@ window.collectGridData = function() {
             
             data[locationId][keyM] = mCount;
             data[locationId][keyF] = fCount;
+            
+            if (mCount > 0 || fCount > 0) {
+                hasData = true;
+            }
         });
+        
+        // Optional: Remove location entry if all data is zero
+        if (!hasData) {
+            delete data[locationId];
+        }
     });
     return data;
 };
