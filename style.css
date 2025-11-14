@@ -1,97 +1,82 @@
-/* Custom styles for the grid, using Inter font */
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
-body {
-    font-family: 'Inter', sans-serif;
-    background-color: #f3f4f6;
-}
-
-/* Style for editable cells */
-.data-input {
-    width: 100%;
-    height: 100%;
-    text-align: center;
-    border: none;
-    padding: 4px 2px;
-    background-color: transparent;
-    font-weight: 600;
-    color: #1f2937;
-    transition: background-color 0.15s;
-}
-.data-input:focus {
-    outline: none;
-    background-color: #e5e7eb;
-    box-shadow: 0 0 0 2px #3b82f6;
-}
-
-/* Grid table styling */
-#dataGrid th, #dataGrid td, #reportGrid th, #reportGrid td {
-    padding: 0;
-    border: 1px solid #d1d5db;
-}
-#dataGrid th, #reportGrid th {
-    font-size: 0.75rem;
-    line-height: 1rem;
-    text-transform: uppercase;
-    background-color: #1f2937;
-    color: white;
-    padding: 8px 4px;
-}
-.total-cell {
-    background-color: #fcd34d; /* Yellow total cells */
-    font-weight: 700;
-    color: #1f2937;
-    text-align: center;
-    padding: 8px 4px;
-}
-.header-bg-dark {
-     background-color: #1f2937;
-     color: white;
-}
+/* Sticky column styling for data tables */
 .sticky-col {
     position: sticky;
     left: 0;
     z-index: 10;
-    background-color: #e5e7eb;
-    font-weight: 600;
-    text-align: left;
-    padding-left: 12px !important;
+    /* Ensuring the sticky column background matches its row */
+    background-color: inherit; 
+}
+.sticky-col:hover {
+    background-color: #f3f4f6; /* Subtle hover effect */
 }
 
-/* Container for the scrollable grid */
-.grid-container {
-    overflow-x: auto;
-    max-width: 100vw;
-    border: 1px solid #d1d5db;
-    border-radius: 0.5rem;
-}
-/* Ensure sticky headers and footers work */
-#dataGrid thead, #reportGrid thead {
-    position: sticky;
+/* Specific sticky styling for headers and footers */
+#dataGrid thead th.sticky-col, #reportGrid thead th.sticky-col {
+    z-index: 20; /* Higher than body sticky-col */
     top: 0;
-    z-index: 20;
+    /* Match background to header styles in JS */
+    background-color: #374151 !important; 
+    color: white;
 }
-#dataGrid tfoot, #reportGrid tfoot {
-    position: sticky;
+#dataGrid tfoot td.sticky-col, #reportGrid tfoot td.sticky-col {
+    z-index: 20; 
     bottom: 0;
-    z-index: 20;
-    box-shadow: 0 -2px 5px rgba(0, 0, 0, 0.1);
+    background-color: #f59e0b !important; /* Yellow-500 */
+    color: black;
+}
+
+/* Input styling within the table */
+.data-input {
+    width: 100%;
+    box-sizing: border-box;
+    text-align: center;
+    border: none;
+    padding: 0.25rem 0.5rem; /* Reduced padding for compact look */
+    height: 100%; /* Fill the cell height */
+    background-color: #eff6ff; /* Light blue background for input cells */
+}
+.data-input:focus {
+    background-color: #fff;
+    outline: 2px solid #3b82f6; /* Blue ring on focus */
+}
+
+/* Table layout adjustments */
+.table-fixed {
+    table-layout: fixed;
 }
 
 /* Tab styling */
-.tab-button {
-    padding: 10px 20px;
-    border-radius: 0.5rem 0.5rem 0 0;
-    cursor: pointer;
-    font-weight: 600;
-    transition: all 0.2s;
+.tab {
+    @apply px-4 py-2 border-b-2 font-medium transition duration-150 ease-in-out;
 }
 .tab-active {
-    background-color: white;
-    color: #1d4ed8;
-    border-bottom: 2px solid #1d4ed8;
+    @apply border-blue-500 text-blue-600;
 }
 .tab-inactive {
-    background-color: #f3f4f6;
-    color: #6b7280;
+    @apply border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300;
 }
 
+/* Custom styling for multiselect elements to ensure better visibility/usability */
+select[multiple] {
+    padding: 0; /* Remove default padding */
+    height: 100px; /* Set a default height */
+    /* Ensure scrollbar visibility if needed */
+    overflow-y: auto; 
+}
+select[multiple] option {
+    padding: 4px 8px;
+}
+select[multiple] option:checked {
+    background-color: #bfdbfe; /* Light blue background for selected items */
+    color: #1e40af; /* Darker blue text */
+}
+
+/* General design improvements */
+.header-bg-dark {
+    background-color: #374151; /* Gray-700 */
+    color: white;
+}
+.total-cell {
+    text-align: center;
+    font-weight: bold;
+}
