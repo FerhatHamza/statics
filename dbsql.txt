@@ -9,17 +9,16 @@ CREATE TABLE app_configs (
 
 -- Table to store the individual monthly surveillance reports.
 -- The complex grid data is stored as a JSON string in the 'report_data' column.
+-- Unique identifier: combines user, month, and disease (e.g., user123_2025-11_Leishmaniose_Cutanée)
 CREATE TABLE monthly_reports (
-    -- Unique identifier: combines user, month, and disease (e.g., user123_2025-11_Leishmaniose_Cutanée)
     report_id TEXT PRIMARY KEY NOT NULL,
     user_id TEXT NOT NULL,
-    month_id TEXT NOT NULL, -- YYYY-MM
+    month_id TEXT NOT NULL, 
     disease_id TEXT NOT NULL,
-    reporter_id TEXT, -- Who saved the report
-    report_data TEXT NOT NULL, -- The main grid data (JSON string)
+    reporter_id TEXT, 
+    report_data TEXT NOT NULL, 
     timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
 -- Index for faster lookup of all reports belonging to a single user (for aggregation)
 CREATE INDEX idx_user_id ON monthly_reports (user_id);
-```eof
