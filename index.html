@@ -3,150 +3,130 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Epidemiological Data Entry & Reporting</title>
-    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
-    <link rel="stylesheet" href="styles.css">
-    <script src="https://d3js.org/d3.v7.min.js"></script>
-</head>
-<body class="bg-gray-50 min-h-screen">
+    <title>Health Data Entry and Reporting Tool</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="style.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
+    </head>
+<body class="min-h-screen p-4">
 
-    <div class="container mx-auto p-4 md:p-8">
-        <header class="mb-8 p-4 bg-white shadow-md rounded-lg">
-            <h1 class="text-3xl font-bold text-gray-800 border-b pb-2">🩺 Epidemiological Surveillance</h1>
-            <p class="text-sm text-gray-500">User ID: <span id="userIdDisplay" class="font-mono"></span></p>
+    <div class="max-w-7xl mx-auto bg-white p-6 rounded-xl shadow-2xl">
+        <header class="mb-6 border-b border-gray-200 pb-4">
+            <h1 class="text-3xl font-extrabold text-gray-900">Health Data Administration</h1>
+            <p class="text-sm text-gray-500">
+                Data Entry, Reporting, and Admin Tools for <span id="userIdDisplay" class="font-mono text-xs bg-gray-200 px-1 rounded"></span>
+            </p>
+            <div id="statusMessage" class="hidden mt-4"></div>
         </header>
 
-        <div class="tabs mb-6 flex space-x-2">
-            <button id="entryTab" onclick="switchView('entry')" class="tab tab-active">Data Entry</button>
-            <button id="reportingTab" onclick="switchView('reporting')" class="tab tab-inactive">Reporting & Analysis</button>
-            <button id="adminTab" onclick="switchView('admin')" class="tab tab-inactive">Admin Tools</button>
-        </div>
+        <nav class="mb-6 flex space-x-1 border-b border-gray-200">
+            <button id="entryTab" class="tab-button tab-active" onclick="switchView('entry')">
+                Data Entry
+            </button>
+            <button id="reportingTab" class="tab-button tab-inactive" onclick="switchView('reporting')">
+                Reporting and Analysis
+            </button>
+            <button id="adminTab" class="tab-button tab-inactive" onclick="switchView('admin')">
+                Admin Tools (Config)
+            </button>
+        </nav>
 
-        <div id="statusMessage" class="mb-4 p-3 rounded-lg text-sm hidden"></div>
-
-        <div id="entryView" class="view-card">
-            <h2 class="text-2xl font-semibold mb-6 text-gray-700">Data Entry: Monthly Case Reporting</h2>
-            
-            <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6 items-end">
-                <div>
-                    <label for="entryMonthSelect" class="block label">Reporting Month (YYYY-MM)</label>
-                    <input type="month" id="entryMonthSelect" class="input-field">
+        <section id="entryView" class="view">
+            <div class="flex flex-wrap gap-4 mb-6 items-end p-4 bg-gray-50 rounded-lg">
+                <div class="flex-1 min-w-[150px]">
+                    <label for="entryMonthSelect" class="block text-sm font-medium text-gray-700">Reporting Month</label>
+                    <input type="month" id="entryMonthSelect" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2">
                 </div>
-                <div>
-                    <label for="entryDiseaseSelect" class="block label">Disease</label>
-                    <select id="entryDiseaseSelect" class="input-field"></select>
+                <div class="flex-1 min-w-[200px]">
+                    <label for="entryDiseaseSelect" class="block text-sm font-medium text-gray-700">Disease Filter</label>
+                    <select id="entryDiseaseSelect" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2"></select>
                 </div>
-                <div class="md:col-span-2 flex space-x-4">
-                    <button id="saveButton" class="w-full btn-primary">
-                        Save Monthly Report
-                    </button>
-                    <button onclick="window.clearGridInputs()" class="w-1/3 btn-secondary">
-                        Clear
-                    </button>
-                </div>
+                <button id="saveButton" onclick="saveEntry()" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg shadow-md transition duration-200 w-full md:w-auto">
+                    Save Monthly Report
+                </button>
             </div>
-
-            <div class="overflow-x-auto relative shadow-md sm:rounded-lg border border-gray-300">
-                <table id="dataGrid" class="data-table">
+            
+            <div class="grid-container max-h-[60vh]">
+                <table id="dataGrid" class="table-fixed min-w-full">
                     </table>
             </div>
-        </div>
-
-        <div id="reportingView" class="hidden view-card">
-            <h2 class="text-2xl font-semibold mb-6 text-gray-700">📈 Reporting Filters</h2>
             
-            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6 mb-6">
-                <div class="filter-group">
-                    <label for="reportTypeSelect" class="label">Report Frequency</label>
-                    <select id="reportTypeSelect" class="input-field">
+        </section>
+
+        <section id="reportingView" class="view hidden">
+            <h2 class="text-2xl font-bold text-gray-800 mb-4">Aggregated Reporting & Analysis</h2>
+            
+            <div class="flex flex-wrap gap-4 mb-6 items-end p-4 bg-gray-50 rounded-lg">
+                <div class="flex-1 min-w-[150px]">
+                    <label for="reportTypeSelect" class="block text-sm font-medium text-gray-700">Report Type</label>
+                    <select id="reportTypeSelect" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2">
                         <option value="monthly">Monthly</option>
                         <option value="quarterly">Quarterly</option>
                         <option value="semiannual">Semi-Annual</option>
                         <option value="annual">Annual</option>
                     </select>
                 </div>
-                
-                <div class="filter-group">
-                    <label for="reportPeriodSelect" class="label">Period Selection</label>
-                    <select id="reportPeriodSelect" class="input-field"></select>
+                <div class="flex-1 min-w-[200px]">
+                    <label for="reportPeriodSelect" class="block text-sm font-medium text-gray-700">Time Period</label>
+                    <select id="reportPeriodSelect" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2"></select>
                 </div>
-
-                <div class="filter-group lg:col-span-3">
-                    <label class="label">Disease Filter</label>
-                    <div class="flex space-x-2 mb-1">
-                        <select id="diseaseAddSelect" class="input-field w-2/3"></select>
-                        <button onclick="window.addFilterTag('disease')" class="btn-sm btn-select-add">Add Disease</button>
-                        <button onclick="window.toggleSelectAll('disease')" id="diseaseSelectAllBtn" class="btn-sm btn-select-all">Select All</button>
-                    </div>
-                    <div id="reportDisease_tagsContainer" class="filter-tag-container"></div>
+                <div class="flex-1 min-w-[200px]">
+                    <label for="reportDiseaseSelect" class="block text-sm font-medium text-gray-700">Disease Filter</label>
+                    <select id="reportDiseaseSelect" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2"></select>
                 </div>
-
-                <div class="filter-group lg:col-span-3">
-                    <label class="label">Locations (EPSP/Commune)</label>
-                    <div class="flex space-x-2 mb-1">
-                        <select id="locationAddSelect" class="input-field w-2/3"></select>
-                        <button onclick="window.addFilterTag('location')" class="btn-sm btn-select-add">Add Location</button>
-                        <button onclick="window.toggleSelectAll('location')" id="locationSelectAllBtn" class="btn-sm btn-select-all">Select All</button>
-                    </div>
-                    <div id="reportLocation_tagsContainer" class="filter-tag-container"></div>
-                </div>
-
-                <div class="filter-group lg:col-span-2">
-                    <label class="label">Age Intervals</label>
-                    <div class="flex space-x-2 mb-1">
-                        <select id="intervalAddSelect" class="input-field w-2/3"></select>
-                        <button onclick="window.addFilterTag('interval')" class="btn-sm btn-select-add">Add Interval</button>
-                        <button onclick="window.toggleSelectAll('interval')" id="intervalSelectAllBtn" class="btn-sm btn-select-all">Select All</button>
-                    </div>
-                    <div id="reportInterval_tagsContainer" class="filter-tag-container"></div>
-                </div>
-            </div>
-            
-            <hr class="my-6 border-gray-200">
-            
-            <h3 id="reportTotalCount" class="text-xl font-bold mb-6 text-center text-blue-700">Report Total: 0 Cases</h3>
-            
-            <div id="reportCharts" class="flex flex-wrap justify-center space-x-0 lg:space-x-8 mb-8">
-                <p class="text-center text-gray-500 py-8 font-semibold w-full">Charts will appear after generating a report.</p>
+                <h3 id="reportTotalCount" class="text-xl font-extrabold text-yellow-700 bg-yellow-100 p-2 rounded-lg">
+                    Report Total: 0 Cases
+                </h3>
             </div>
 
-            <div class="overflow-x-auto relative shadow-md sm:rounded-lg border border-gray-300">
-                <table id="reportGrid" class="data-table">
+            <h3 class="text-xl font-bold text-gray-800 border-b pb-2 mb-4">Visual Analysis (Charts)</h3>
+            <div id="reportCharts" class="flex flex-wrap justify-center gap-5">
+                </div>
+
+            <h3 class="text-xl font-bold text-gray-800 border-b pb-2 mt-8 mb-4">Raw Data Grid</h3>
+            <div class="grid-container max-h-[60vh]">
+                <table id="reportGrid" class="table-fixed min-w-full">
                     </table>
             </div>
 
-        </div>
-        
-        <div id="adminView" class="hidden view-card">
-            <h2 class="text-2xl font-semibold mb-6 text-gray-700">🔧 Admin Tools: Configuration</h2>
+        </section>
 
-            <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                <div class="config-panel bg-yellow-50 border-yellow-300">
-                    <h3 class="text-xl font-semibold mb-3 text-yellow-800">Manage Diseases</h3>
-                    <div class="flex mb-4 space-x-2">
-                        <input type="text" id="newDiseaseInput" placeholder="New Disease Name" class="input-field flex-grow">
-                        <button id="addDiseaseButton" class="btn-secondary bg-yellow-600 hover:bg-yellow-700 text-white">Add</button>
+        <section id="adminView" class="view hidden">
+            <h2 class="text-2xl font-bold text-gray-800 mb-4">System Configuration</h2>
+            
+            <div class="grid md:grid-cols-2 gap-8">
+                <div class="p-4 border rounded-xl shadow-lg bg-yellow-50">
+                    <h3 class="text-xl font-semibold text-yellow-800 mb-3">Manage Diseases</h3>
+                    <div class="flex mb-4 gap-2">
+                        <input type="text" id="newDiseaseInput" placeholder="Enter new disease name..." class="flex-grow p-2 border rounded-lg">
+                        <button id="addDiseaseButton" class="bg-yellow-500 hover:bg-yellow-600 text-white font-bold py-2 px-4 rounded-lg transition duration-200">
+                            Add
+                        </button>
                     </div>
-                    <ul id="diseaseList" class="space-y-2 max-h-64 overflow-y-auto"></ul>
+                    <ul id="diseaseList" class="space-y-2 max-h-60 overflow-y-auto">
+                        </ul>
                 </div>
 
-                <div class="config-panel bg-teal-50 border-teal-300">
-                    <h3 class="text-xl font-semibold mb-3 text-teal-800">Manage Locations</h3>
-                    <div class="flex mb-4 space-x-2">
-                        <input type="text" id="newLocationInput" placeholder="EPSP: Commune/Secteur" class="input-field flex-grow">
-                        <button id="addLocationButton" class="btn-secondary bg-teal-600 hover:bg-teal-700 text-white">Add</button>
+                <div class="p-4 border rounded-xl shadow-lg bg-teal-50">
+                    <h3 class="text-xl font-semibold text-teal-800 mb-3">Manage Locations (EPSP: Commune/Secteur)</h3>
+                    <div class="flex mb-4 gap-2">
+                        <input type="text" id="newLocationInput" placeholder="Enter location (e.g., EP: Sector X)..." class="flex-grow p-2 border rounded-lg">
+                        <button id="addLocationButton" class="bg-teal-500 hover:bg-teal-600 text-white font-bold py-2 px-4 rounded-lg transition duration-200">
+                            Add
+                        </button>
                     </div>
-                    <ul id="locationList" class="space-y-2 max-h-64 overflow-y-auto"></ul>
-                </div>
-                
-                <div class="flex items-start">
-                     <button id="saveConfigButton" class="mt-8 lg:mt-0 w-full btn-primary bg-green-600 hover:bg-green-700 text-white py-3 px-4 text-lg">
-                        Save All Configuration Changes
-                    </button>
+                    <ul id="locationList" class="space-y-2 max-h-60 overflow-y-auto">
+                        </ul>
                 </div>
             </div>
-        </div>
-        
+
+            <div class="mt-8 text-center">
+                <button id="saveConfigButton" class="bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-8 rounded-xl shadow-lg transition duration-200">
+                    Save All Configuration Changes
+                </button>
+            </div>
+        </section>
+
     </div>
 
     <script src="app.js"></script>
