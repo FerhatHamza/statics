@@ -56,18 +56,24 @@ window.onload = async function() {
     const currentMonth = new Date().toISOString().substring(0, 7); // YYYY-MM
     document.getElementById('entryMonthSelect').value = currentMonth;
     
-    // FIX 1: Ensure reporting type has a default value on load for robustness
-    const reportTypeSelect = document.getElementById('reportTypeSelect');
-    if (reportTypeSelect && !reportTypeSelect.value) {
-        reportTypeSelect.value = 'monthly';
-    }
-
     // Start the app by loading the config
     await window.loadConfigAndRerender();
     
     // Set up initial event listeners
     document.getElementById('entryMonthSelect').addEventListener('change', () => window.listenForEntryDataChanges());
     document.getElementById('entryDiseaseSelect').addEventListener('change', () => window.listenForEntryDataChanges());
+    
+    // Add event listeners for Reporting Filters (Crucial for fixing the reporting bug)
+    const reportTypeSelect = document.getElementById('reportTypeSelect');
+    const reportPeriodSelect = document.getElementById('reportPeriodSelect');
+    const reportDiseaseSelect = document.getElementById('reportDiseaseSelect');
+
+    if (reportTypeSelect) reportTypeSelect.addEventListener('change', () => { 
+        window.updateReportFilters(); 
+        window.loadAggregatedReport();
+    });
+    if (reportPeriodSelect) reportPeriodSelect.addEventListener('change', window.loadAggregatedReport);
+    if (reportDiseaseSelect) reportDiseaseSelect.addEventListener('change', window.loadAggregatedReport);
 
     // === Add event listeners for Admin buttons to ensure functionality ===
     const addDiseaseBtn = document.getElementById('addDiseaseButton');
@@ -427,21 +433,38 @@ window.setupReportingFilters = function() {
           { id: "FULL", label: "Full Year", months: ["01", "02", "03", "04", "05", "06", "07", "08", "09", "10", "11", "12"] }
       ];
       
-      updateReportFilters();
+      window.updateReportFilters();
 }
 
+/**
+ * Updates the Period dropdown based on the selected Report Type (monthly, quarterly, etc.).
+ * Includes robust checks for element existence and default value assignment (Fix for app.js:444).
+ */
 window.updateReportFilters = function() {
-    const type = document.getElementById('reportTypeSelect').value;
+    const reportTypeSelect = document.getElementById('reportTypeSelect');
     const periodSelect = document.getElementById('reportPeriodSelect');
+
+    if (!reportTypeSelect || !periodSelect) {
+        console.error("Error: Required reporting filter elements (selects) not found.");
+        return; 
+    }
+
+    // Ensure type has a value, defaulting to 'monthly' if empty
+    let type = reportTypeSelect.value;
+    if (!type || type === '') {
+        type = 'monthly';
+        reportTypeSelect.value = type; // Set the default value on the element
+    }
+    
     const currentYear = new Date().getFullYear();
 
     periodSelect.innerHTML = '';
     
     const periods = REPORT_PERIODS[type];
     
-    // FIX 2: Guard clause to prevent crashing if 'periods' array is undefined
+    // Guard clause to prevent crashing if 'periods' array is invalid/undefined
     if (!periods) {
-        console.error(`Error: Invalid report type selected: ${type}`);
+        console.error(`Error: Invalid report type selected: ${type}`); 
         return;
     }
 
@@ -452,6 +475,7 @@ window.updateReportFilters = function() {
               option.textContent = p.label;
               periodSelect.appendChild(option);
           });
+          // Default to the current month if available
           periodSelect.value = document.getElementById('entryMonthSelect').value;
     } else {
           for (let y = currentYear; y >= 2024; y--) {
