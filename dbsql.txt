@@ -1,0 +1,25 @@
+-- Table to store configuration (Diseases and Locations) for each user.
+-- The content is stored as JSON text and parsed by the Worker.
+CREATE TABLE app_configs (
+    user_id TEXT PRIMARY KEY NOT NULL,
+    diseases TEXT NOT NULL,
+    locations TEXT NOT NULL,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Table to store the individual monthly surveillance reports.
+-- The complex grid data is stored as a JSON string in the 'report_data' column.
+CREATE TABLE monthly_reports (
+    -- Unique identifier: combines user, month, and disease (e.g., user123_2025-11_Leishmaniose_Cutanée)
+    report_id TEXT PRIMARY KEY NOT NULL,
+    user_id TEXT NOT NULL,
+    month_id TEXT NOT NULL, -- YYYY-MM
+    disease_id TEXT NOT NULL,
+    reporter_id TEXT, -- Who saved the report
+    report_data TEXT NOT NULL, -- The main grid data (JSON string)
+    timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Index for faster lookup of all reports belonging to a single user (for aggregation)
+CREATE INDEX idx_user_id ON monthly_reports (user_id);
+```eof
