@@ -1,9 +1,7 @@
 // --- Configuration and Global State ---
 
-// FIX: Changed from a relative path to the absolute URL of the deployed Worker API
+// FIX: Ensure this is the correct API endpoint
 const API_BASE_URL = 'https://mehidistatics-api.ferhathamza17.workers.dev/api/v1'; 
-
-// This simulates the user authentication ID provided by the environment
 const userId = typeof __app_id !== 'undefined' ? `user-${__app_id}` : 'guest-user-1234'; 
 
 // Global data stores
@@ -26,7 +24,6 @@ const REPORT_PERIODS = {
  * Generic helper to make API calls to the Worker
  */
 async function makeApiCall(endpoint, method = 'GET', data = null) {
-    // Construct the full URL using the absolute worker domain
     const url = `${API_BASE_URL}/user/${userId}${endpoint}`;
     const options = {
         method: method,
@@ -56,7 +53,6 @@ window.onload = async function() {
     const currentMonth = new Date().toISOString().substring(0, 7); // YYYY-MM
     document.getElementById('entryMonthSelect').value = currentMonth;
     
-    // Start the app by loading the config
     await window.loadConfigAndRerender();
     
     // Set up initial event listeners for Data Entry
@@ -64,21 +60,26 @@ window.onload = async function() {
     document.getElementById('entryDiseaseSelect').addEventListener('change', () => window.listenForEntryDataChanges());
     document.getElementById('saveButton').addEventListener('click', window.saveEntry);
     
-    // Add event listeners for Reporting Filters (CRITICAL FIX)
+    // Add event listeners for Reporting Filters (CRITICAL)
     const reportTypeSelect = document.getElementById('reportTypeSelect');
     const reportPeriodSelect = document.getElementById('reportPeriodSelect');
     const reportDiseaseSelect = document.getElementById('reportDiseaseSelect');
+    const reportLocationSelect = document.getElementById('reportLocationSelect'); // NEW
+    const reportIntervalSelect = document.getElementById('reportIntervalSelect'); // NEW
 
     // Changing Report Type updates periods and triggers new report load
     if (reportTypeSelect) reportTypeSelect.addEventListener('change', () => { 
         window.updateReportFilters(); 
         window.loadAggregatedReport();
     });
-    // Changing Period or Disease triggers report load
+    
+    // Changing Period, Disease, Location, or Interval triggers report load
     if (reportPeriodSelect) reportPeriodSelect.addEventListener('change', window.loadAggregatedReport);
     if (reportDiseaseSelect) reportDiseaseSelect.addEventListener('change', window.loadAggregatedReport);
+    if (reportLocationSelect) reportLocationSelect.addEventListener('change', window.loadAggregatedReport);
+    if (reportIntervalSelect) reportIntervalSelect.addEventListener('change', window.loadAggregatedReport);
 
-    // === Add event listeners for Admin buttons ===
+    // === Admin event listeners ===
     const addDiseaseBtn = document.getElementById('addDiseaseButton');
     if (addDiseaseBtn) addDiseaseBtn.addEventListener('click', window.addDisease);
 
@@ -106,7 +107,7 @@ window.loadConfigAndRerender = async function() {
     window.populateFilterDropdowns();
     window.renderEntryGrid();
     window.renderReportGrid();
-    window.setupReportingFilters(); // Initialize periods and update filters
+    window.setupReportingFilters(); // Initialize periods, locations, and intervals
     window.listenForEntryDataChanges(); // Initial data load for entry view
 };
 
@@ -131,8 +132,9 @@ window.switchView = async function(view) {
         await window.listenForEntryDataChanges();
     } else if (view === 'reporting') {
         await window.fetchAllMonthlyData();
-        // Ensure filters are correctly populated and a report is run on view change
+        // Update filters and run report
         window.updateReportFilters();
+        window.populateLocationAndIntervalFilters(); 
         window.loadAggregatedReport();
     } else if (view === 'admin') {
         window.renderConfigLists();
@@ -252,12 +254,14 @@ window.setupReportingFilters = function() {
       const startYear = 2024; 
       
       const monthPeriods = [];
+      // CORRECTED: Monthly periods loop to create YYYY-MM IDs
       for (let y = currentYear; y >= startYear; y--) {
           for (let m = 12; m >= 1; m--) {
               const monthStr = m.toString().padStart(2, '0');
+              const monthId = `${y}-${monthStr}`;
               monthPeriods.push({
-                  id: `${y}-${monthStr}`,
-                  label: `${y}-${monthStr}`,
+                  id: monthId,
+                  label: monthId,
                   months: [monthStr]
               });
           }
@@ -278,7 +282,37 @@ window.setupReportingFilters = function() {
       ];
       
       window.updateReportFilters();
+      window.populateLocationAndIntervalFilters(); 
 }
+
+/**
+ * Populates the new Location and Age Interval multi-selects.
+ */
+window.populateLocationAndIntervalFilters = function() {
+    const locSelect = document.getElementById('reportLocationSelect');
+    const intSelect = document.getElementById('reportIntervalSelect');
+    
+    // Populate Locations (Rows)
+    locSelect.innerHTML = '';
+    window.LOCATIONS.forEach(loc => {
+        const option = document.createElement('option');
+        // Use the sanitized ID for the value, but the full name for display
+        option.value = loc.replace(/[^a-zA-Z0-9]/g, '_'); 
+        option.textContent = loc;
+        option.selected = true; // Select all by default
+        locSelect.appendChild(option);
+    });
+
+    // Populate Age Intervals (Columns)
+    intSelect.innerHTML = '';
+    AGE_INTERVALS.forEach(interval => {
+        const option = document.createElement('option');
+        option.value = interval;
+        option.textContent = interval.replace(/_/g, '-').replace('plus', '+');
+        option.selected = true; // Select all by default
+        intSelect.appendChild(option);
+    });
+};
 
 /**
  * Updates the Period dropdown based on the selected Report Type.
@@ -289,7 +323,6 @@ window.updateReportFilters = function() {
 
     if (!reportTypeSelect || !periodSelect) return; 
 
-    // Enforce default value if none is selected
     let type = reportTypeSelect.value;
     if (!type || type === '') {
         type = 'monthly';
@@ -304,7 +337,7 @@ window.updateReportFilters = function() {
     if (!periods) return;
 
     if (type === 'monthly') {
-          // Monthly periods are already year-month formatted
+          // Monthly periods are already year-month formatted (YYYY-MM)
           periods.forEach(p => {
               const option = document.createElement('option');
               option.value = p.id;
@@ -320,7 +353,7 @@ window.updateReportFilters = function() {
           }
 
     } else {
-          // Quarterly, Semi-Annual, Annual periods are prefixed by year
+          // Quarterly, Semi-Annual, Annual periods are prefixed by year (YYYY_Q1)
           for (let y = currentYear; y >= 2024; y--) {
               periods.forEach(p => {
                   const option = document.createElement('option');
@@ -342,15 +375,31 @@ window.updateReportFilters = function() {
 window.loadAggregatedReport = async function() {
     const reportType = document.getElementById('reportTypeSelect').value;
     const periodValue = document.getElementById('reportPeriodSelect').value;
-    const diseaseFilter = document.getElementById('reportDiseaseSelect').value;
+    
+    // Get selected filters (multi-selects)
+    const selectedDiseases = Array.from(document.getElementById('reportDiseaseSelect').selectedOptions).map(opt => opt.value);
+    const selectedLocations = Array.from(document.getElementById('reportLocationSelect').selectedOptions).map(opt => opt.value);
+    const selectedIntervals = Array.from(document.getElementById('reportIntervalSelect').selectedOptions).map(opt => opt.value);
     
     if (window.LOCATIONS.length === 0) {
-          document.getElementById('reportGrid').innerHTML = `<tr><td colspan="${(AGE_INTERVALS.length * 2) + 3}" class="text-center p-8 text-gray-500">
+          document.getElementById('reportGrid').innerHTML = `<thead><tr><td colspan="${(AGE_INTERVALS.length * 2) + 3}" class="text-center p-8 text-gray-500">
             Cannot generate report: No locations defined.
-          </td></tr>`;
+          </td></tr></thead>`;
           document.getElementById('reportTotalCount').textContent = "Report Total: 0 Cases";
           d3.select('#reportCharts').html('<p class="text-center text-gray-500 py-8 font-semibold">No locations defined in Admin Tools.</p>');
           return;
+    }
+    
+    // Check if essential filters are empty
+    if (selectedDiseases.length === 0 || selectedLocations.length === 0 || selectedIntervals.length === 0) {
+        document.getElementById('statusMessage').textContent = "Please select at least one Disease, Location, and Age Interval.";
+        document.getElementById('statusMessage').className = "mb-4 p-3 rounded-lg text-sm bg-yellow-100 text-yellow-700";
+        document.getElementById('reportGrid').innerHTML = `<thead><tr><td colspan="${(AGE_INTERVALS.length * 2) + 3}" class="text-center p-8 text-gray-500">
+            Select filters above to generate a report.
+          </td></tr></thead>`;
+        document.getElementById('reportTotalCount').textContent = "Report Total: 0 Cases";
+        d3.select('#reportCharts').html('<p class="text-center text-gray-500 py-8 font-semibold">Select filters to generate report.</p>');
+        return;
     }
     
     const { fullMonthStrings, year } = getAggregationMonths(reportType, periodValue);
@@ -362,51 +411,313 @@ window.loadAggregatedReport = async function() {
           return;
     }
     
-    const aggregatedData = aggregateData(fullMonthStrings, year, diseaseFilter);
-    window.loadDataIntoGrid(aggregatedData, 'reportGrid');
-    
-    // Call the chart rendering function
-    window.renderCharts(aggregatedData, diseaseFilter, periodValue);
+    // 1. Aggregate data based on Time Period and Diseases
+    const aggregatedData = aggregateData(fullMonthStrings, year, selectedDiseases);
 
-    document.getElementById('statusMessage').textContent = `Report loaded for ${diseaseFilter.replace(/_/g, ' ')} for ${periodValue.replace(/_/g, ' - ')}.`;
+    // 2. Filter and Render the Grid based on selected Locations and Intervals
+    window.filterAndRenderGrid(aggregatedData, selectedLocations, selectedIntervals, 'reportGrid');
+    
+    // 3. Render charts
+    window.renderCharts(aggregatedData, selectedLocations, selectedIntervals, periodValue);
+
+    document.getElementById('statusMessage').textContent = `Report loaded for ${selectedDiseases.join(', ').replace(/_/g, ' ')} for ${periodValue.replace(/_/g, ' - ')}.`;
     document.getElementById('statusMessage').className = "mb-4 p-3 rounded-lg text-sm bg-blue-100 text-blue-700";
 };
 
 
-// --- D3 CHARTING LOGIC ---
+// --- Core Aggregation and Filtering Logic ---
+
+function getAggregationMonths(type, periodValue) {
+      const year = periodValue.substring(0, 4); 
+      let monthsToAggregate = [];
+      
+      if (type === 'monthly') {
+          // If monthly, the periodValue is 'YYYY-MM', and we just need the 'MM'
+          monthsToAggregate = [periodValue.substring(5, 7)]; 
+      } else {
+          // For Q, S, or Annual, find the months based on the period ID (e.g., Q1)
+          const periodId = periodValue.split('_')[1];
+          const periods = REPORT_PERIODS[type];
+          const periodsConfig = periods ? periods.find(p => p.id === periodId) : null;
+
+          if (periodsConfig) {
+              monthsToAggregate = periodsConfig.months;
+          }
+      }
+      
+      const fullMonthStrings = monthsToAggregate.map(m => `${year}-${m}`);
+
+      return { fullMonthStrings, year: year };
+}
 
 /**
- * Prepares data and calls the specific chart rendering functions.
+ * Aggregates monthly data for the selected time period and diseases.
+ * NOTE: This function only aggregates across time/diseases, it DOES NOT filter by Location or Interval.
  */
-window.renderCharts = function(aggregatedData, diseaseFilter, periodValue) {
+function aggregateData(fullMonthStrings, year, selectedDiseases) {
+    const aggregated = {};
+    
+    // Initialize aggregated structure for ALL locations/intervals
+    window.LOCATIONS.forEach(location => {
+        const locationId = location.replace(/[^a-zA-Z0-9]/g, '_');
+        aggregated[locationId] = {};
+        AGE_INTERVALS.forEach(interval => {
+            aggregated[locationId][`M_${interval}`] = 0;
+            aggregated[locationId][`F_${interval}`] = 0;
+        });
+    });
+    
+    // Sum data from all matching monthly reports
+    Object.values(window.allMonthlyData).forEach(monthlyReport => {
+        const monthYear = monthlyReport.monthId;
+        const disease = monthlyReport.disease;
+        
+        // Filter by time period (monthlyReport.monthId) and selected diseases
+        if (fullMonthStrings.includes(monthYear) && selectedDiseases.includes(disease)) {
+                
+            const reportData = monthlyReport.data;
+            
+            window.LOCATIONS.forEach(location => {
+                const locationId = location.replace(/[^a-zA-Z0-9]/g, '_');
+                const locData = reportData[locationId];
+                
+                if (locData) {
+                    AGE_INTERVALS.forEach(interval => {
+                        const keyM = `M_${interval}`;
+                        const keyF = `F_${interval}`;
+                        
+                        // Ensure we only sum existing keys
+                        if (locData.hasOwnProperty(keyM)) {
+                            aggregated[locationId][keyM] += locData[keyM] || 0;
+                        }
+                        if (locData.hasOwnProperty(keyF)) {
+                            aggregated[locationId][keyF] += locData[keyF] || 0;
+                        }
+                    });
+                }
+            });
+        }
+    });
+    
+    return aggregated;
+}
+
+/**
+ * NEW FUNCTION: Filters and renders the report grid based on selected Locations and Intervals.
+ */
+window.filterAndRenderGrid = function(data, selectedLocations, selectedIntervals, tableId) {
+    const table = document.getElementById(tableId);
+    if (!table) return;
+
+    let html = '';
+    
+    // 1. Determine which locations and intervals to display
+    // Map full location names back from their IDs to preserve the correct display string
+    const filteredLocations = window.LOCATIONS.filter(loc => selectedLocations.includes(loc.replace(/[^a-zA-Z0-9]/g, '_')));
+    const filteredIntervals = AGE_INTERVALS.filter(int => selectedIntervals.includes(int));
+    
+    // Safety check
+    if (filteredLocations.length === 0 || filteredIntervals.length === 0) {
+        table.innerHTML = `<thead><tr><td colspan="${(AGE_INTERVALS.length * 2) + 3}" class="text-center p-8 text-gray-500">
+            No data to display. Adjust filters (Locations/Intervals).
+        </td></tr></thead>`;
+        window.calculateTotals(tableId, [], []); // Clear totals
+        return;
+    }
+    
+    // --- Header Generation (Only for selected intervals) ---
+    html += '<thead>';
+    html += '<tr class="text-center">';
+    html += '<th rowspan="2" class="sticky-col min-w-[200px] bg-gray-700">EPSP / COMMUNE</th>'; 
+
+    filteredIntervals.forEach(interval => {
+        const label = interval.replace(/_/g, '-').replace('plus', '+');
+        html += `<th colspan="2" class="header-bg-dark">${label}</th>`;
+    });
+    
+    html += '<th colspan="2" class="bg-yellow-600 text-black">TOTAL</th>';
+    html += '<th rowspan="2" class="bg-yellow-700 text-black min-w-[100px] border-l-2 border-gray-400">TOTAL GÉNÉRAL</th>';
+    html += '</tr>';
+
+    html += '<tr class="text-center">';
+    filteredIntervals.forEach(() => {
+        html += '<th class="bg-gray-500 text-white">M</th><th class="bg-gray-500 text-white">F</th>';
+    });
+    html += '<th class="bg-yellow-600 text-black">M</th><th class="bg-yellow-600 text-black">F</th>';
+    html += '</tr>';
+    html += '</thead>';
+
+    // --- Body Generation (Only for selected locations) ---
+    html += '<tbody>';
+    filteredLocations.forEach((location) => {
+        const locationId = location.replace(/[^a-zA-Z0-9]/g, '_');
+        html += `<tr id="row_${locationId}_${tableId}">`;
+        html += `<td class="sticky-col text-sm border-r-2 border-gray-400">${location}</td>`; 
+
+        filteredIntervals.forEach(interval => {
+            const keyM = `M_${interval}`;
+            const keyF = `F_${interval}`;
+            
+            // Get data from the pre-aggregated 'data' object
+            const mCount = data[locationId]?.[keyM] || 0;
+            const fCount = data[locationId]?.[keyF] || 0;
+            
+            // Rendered cells for reporting
+            html += `<td id="report_${locationId}_${keyM}" class="text-center text-sm p-2">${mCount}</td>`;
+            html += `<td id="report_${locationId}_${keyF}" class="text-center text-sm p-2">${fCount}</td>`;
+        });
+
+        // Row Totals placeholders
+        html += `<td id="row_total_M_${locationId}_${tableId}" class="total-cell text-sm min-w-[50px] font-bold">0</td>`;
+        html += `<td id="row_total_F_${locationId}_${tableId}" class="total-cell text-sm min-w-[50px] font-bold">0</td>`;
+        html += `<td id="row_total_G_${locationId}_${tableId}" class="total-cell text-sm min-w-[100px] border-l-2 border-gray-400 font-extrabold">0</td>`;
+
+        html += '</tr>';
+    });
+    html += '</tbody>';
+
+    // --- Footer Generation (Only for selected intervals) ---
+    html += '<tfoot>';
+    html += '<tr class="bg-yellow-500 font-bold">';
+    html += `<td class="sticky-col bg-yellow-500 text-black text-center text-base border-r-2 border-gray-400">TOTAL</td>`;
+
+    filteredIntervals.forEach(interval => {
+        // Column totals placeholders
+        html += `<td id="col_total_M_${interval}_${tableId}" class="total-cell bg-yellow-500 text-black">0</td>`;
+        html += `<td id="col_total_F_${interval}_${tableId}" class="total-cell bg-yellow-500 text-black">0</td>`;
+    });
+    
+    html += `<td id="grand_total_M_${tableId}" class="total-cell bg-yellow-600 text-black text-lg">0</td>`;
+    html += `<td id="grand_total_F_${tableId}" class="total-cell bg-yellow-600 text-black text-lg">0</td>`;
+    html += `<td id="grand_total_G_${tableId}" class="total-cell bg-yellow-700 text-black text-xl border-l-2 border-gray-400">0</td>`;
+
+    html += '</tr>';
+    html += '</tfoot>';
+
+    table.innerHTML = html;
+    
+    // Calculate final totals based on the visible/filtered data
+    window.calculateTotals(tableId, filteredLocations, filteredIntervals);
+};
+
+// **CRITICAL UPDATE** to calculateTotals to use filtered lists (only affects reportGrid)
+window.calculateTotals = function(tableId, locationsList = window.LOCATIONS, intervalsList = AGE_INTERVALS) {
+    const isInput = tableId === 'dataGrid';
+    let grandTotalM = 0;
+    let grandTotalF = 0;
+
+    const colTotals = { M: {}, F: {} };
+    intervalsList.forEach(int => { colTotals.M[int] = 0; colTotals.F[int] = 0; });
+
+    // Loop through the PROVIDED locationsList (either all for entry, or filtered for report)
+    locationsList.forEach(location => {
+        const locationId = location.replace(/[^a-zA-Z0-9]/g, '_');
+        let rowTotalM = 0;
+        let rowTotalF = 0;
+
+        // Loop through the PROVIDED intervalsList 
+        intervalsList.forEach(interval => {
+            const keyM = `M_${interval}`;
+            const keyF = `F_${interval}`;
+            
+            let mCount = 0;
+            let fCount = 0;
+
+            if (isInput) {
+                // For dataGrid, check ALL existing input fields regardless of reporting filters
+                const mInput = document.getElementById(`input_${locationId}_${keyM}`);
+                const fInput = document.getElementById(`input_${locationId}_${keyF}`);
+                mCount = parseInt(mInput ? mInput.value : 0) || 0;
+                fCount = parseInt(fInput ? fInput.value : 0) || 0;
+            } else {
+                // For reportGrid, check only the cells that were rendered
+                const mCell = document.getElementById(`report_${locationId}_${keyM}`);
+                const fCell = document.getElementById(`report_${locationId}_${keyF}`);
+                mCount = parseInt(mCell ? mCell.textContent : 0) || 0; 
+                fCount = parseInt(fCell ? fCell.textContent : 0) || 0;
+            }
+
+            rowTotalM += mCount;
+            rowTotalF += fCount;
+
+            colTotals.M[interval] += mCount;
+            colTotals.F[interval] += fCount;
+        });
+
+        // Update Row Totals
+        const rowTotalMEl = document.getElementById(`row_total_M_${locationId}_${tableId}`);
+        const rowTotalFEl = document.getElementById(`row_total_F_${locationId}_${tableId}`);
+        const rowTotalGEl = document.getElementById(`row_total_G_${locationId}_${tableId}`);
+
+        if (rowTotalMEl) rowTotalMEl.textContent = rowTotalM;
+        if (rowTotalFEl) rowTotalFEl.textContent = rowTotalF;
+        if (rowTotalGEl) rowTotalGEl.textContent = rowTotalM + rowTotalF;
+
+        grandTotalM += rowTotalM;
+        grandTotalF += rowTotalF;
+    });
+
+    // Populate column totals based on the filtered intervals
+    intervalsList.forEach(interval => {
+        const colTotalMEl = document.getElementById(`col_total_M_${interval}_${tableId}`);
+        const colTotalFEl = document.getElementById(`col_total_F_${interval}_${tableId}`);
+        if (colTotalMEl) colTotalMEl.textContent = colTotals.M[interval];
+        if (colTotalFEl) colTotalFEl.textContent = colTotals.F[interval];
+    });
+
+    // Populate Grand Totals
+    const grandTotalMEl = document.getElementById(`grand_total_M_${tableId}`);
+    const grandTotalFEl = document.getElementById(`grand_total_F_${tableId}`);
+    const grandTotalGEl = document.getElementById(`grand_total_G_${tableId}`);
+
+    if (grandTotalMEl) grandTotalMEl.textContent = grandTotalM;
+    if (grandTotalFEl) grandTotalFEl.textContent = grandTotalF;
+    if (grandTotalGEl) grandTotalGEl.textContent = grandTotalM + grandTotalF;
+};
+
+
+// --- Chart Rendering Logic (Must be updated to respect filtered data) ---
+
+window.renderCharts = function(aggregatedData, selectedLocations, selectedIntervals, periodValue) {
     const chartContainer = d3.select('#reportCharts');
-    chartContainer.html(''); // Clear previous charts
+    chartContainer.html(''); 
 
     const locationTotals = [];
-    const ageIntervalTotals = AGE_INTERVALS.map(int => ({ 
+    // Ensure chart intervals match the selected intervals
+    const ageIntervalTotals = selectedIntervals.map(int => ({ 
         interval: int.replace(/_/g, '-').replace('plus', '+'), 
         M: 0, 
         F: 0 
     }));
     let grandTotal = 0;
 
-    window.LOCATIONS.forEach(location => {
+    // Filtered list of locations (used for row iteration)
+    const filteredLocations = window.LOCATIONS.filter(loc => selectedLocations.includes(loc.replace(/[^a-zA-Z0-9]/g, '_')));
+
+    // Only iterate over the locations and intervals selected by the user
+    filteredLocations.forEach(location => {
         const locationId = location.replace(/[^a-zA-Z0-9]/g, '_');
         let locTotal = 0;
         
-        AGE_INTERVALS.forEach((interval, index) => {
-            // Note: Data fetching from aggregatedData relies on the `report_` prefix, 
-            // but since aggregatedData is just the data object, we can directly access it.
-            const mCount = aggregatedData[locationId]?.[`M_${interval}`] || 0;
-            const fCount = aggregatedData[locationId]?.[`F_${interval}`] || 0;
+        selectedIntervals.forEach((interval) => {
+            const keyM = `M_${interval}`;
+            const keyF = `F_${interval}`;
+
+            // Fetch data from the fully aggregated data object
+            const mCount = aggregatedData[locationId]?.[keyM] || 0;
+            const fCount = aggregatedData[locationId]?.[keyF] || 0;
             
             locTotal += mCount + fCount;
-            ageIntervalTotals[index].M += mCount;
-            ageIntervalTotals[index].F += fCount;
+
+            // Only update age interval totals for the selected intervals
+            const chartIntervalIndex = ageIntervalTotals.findIndex(d => d.interval === interval.replace(/_/g, '-').replace('plus', '+'));
+            if (chartIntervalIndex !== -1) {
+                ageIntervalTotals[chartIntervalIndex].M += mCount;
+                ageIntervalTotals[chartIntervalIndex].F += fCount;
+            }
         });
         
         if (locTotal > 0) {
-            // Use only the Commune/Secteur name for cleaner chart labels
             const locName = location.split(':').length > 1 ? location.split(':')[1].trim() : location;
             locationTotals.push({ location: locName, total: locTotal });
         }
@@ -417,18 +728,16 @@ window.renderCharts = function(aggregatedData, diseaseFilter, periodValue) {
     document.getElementById('reportTotalCount').textContent = `Report Total: ${grandTotal} Cases`;
 
     if (grandTotal === 0) {
-        chartContainer.html('<p class="text-center text-gray-500 py-8 font-semibold">No data available for the selected period or disease.</p>');
+        chartContainer.html('<p class="text-center text-gray-500 py-8 font-semibold">No data available after applying all filters.</p>');
         return;
     }
     
-    const title = `${diseaseFilter === 'all' ? 'All Diseases' : diseaseFilter.replace(/_/g, ' ')} Report for ${periodValue.replace(/_/g, ' - ')}`;
+    const title = `Report for ${periodValue.replace(/_/g, ' - ')}`;
 
-    // 1. Pictorial Fraction Chart (Donut Chart)
     if (locationTotals.length > 0) {
         renderPieChart(chartContainer, locationTotals, grandTotal, title);
     }
 
-    // 2. Layered Area Chart (Stacked Bar Chart for categorical data)
     if (ageIntervalTotals.some(d => d.M > 0 || d.F > 0)) {
         renderStackedBarChart(chartContainer, ageIntervalTotals, title);
     }
@@ -613,74 +922,8 @@ function renderStackedBarChart(container, data, title) {
     });
 }
 
-// --- Data Aggregation Helpers ---
 
-function getAggregationMonths(type, periodValue) {
-      const [yearStr, periodId] = periodValue.split('_');
-      const year = yearStr || periodValue.substring(0, 4); 
-      
-      let monthsToAggregate = [];
-      
-      if (type === 'monthly') {
-          monthsToAggregate = [periodValue.substring(5, 7)];
-      } else {
-          const periods = REPORT_PERIODS[type];
-          const periodsConfig = periods ? periods.find(p => p.id === periodId) : null;
-
-          if (periodsConfig) {
-              monthsToAggregate = periodsConfig.months;
-          }
-      }
-      
-      const fullMonthStrings = monthsToAggregate.map(m => `${year}-${m}`);
-
-      return { fullMonthStrings, year: year };
-}
-
-function aggregateData(fullMonthStrings, year, diseaseFilter) {
-    const aggregated = {};
-    
-    // Initialize aggregated structure
-    window.LOCATIONS.forEach(location => {
-        const locationId = location.replace(/[^a-zA-Z0-9]/g, '_');
-        aggregated[locationId] = {};
-        AGE_INTERVALS.forEach(interval => {
-            aggregated[locationId][`M_${interval}`] = 0;
-            aggregated[locationId][`F_${interval}`] = 0;
-        });
-    });
-    
-    // Sum data from all matching monthly reports
-    Object.values(window.allMonthlyData).forEach(monthlyReport => {
-        const monthYear = monthlyReport.monthId;
-        const disease = monthlyReport.disease;
-        
-        if (fullMonthStrings.includes(monthYear) && 
-            (diseaseFilter === 'all' || disease === diseaseFilter)) {
-                
-            const reportData = monthlyReport.data;
-            
-            window.LOCATIONS.forEach(location => {
-                const locationId = location.replace(/[^a-zA-Z0-9]/g, '_');
-                const locData = reportData[locationId];
-                
-                if (locData) {
-                    AGE_INTERVALS.forEach(interval => {
-                        const keyM = `M_${interval}`;
-                        const keyF = `F_${interval}`;
-                        
-                        aggregated[locationId][keyM] += locData[keyM] || 0;
-                        aggregated[locationId][keyF] += locData[keyF] || 0;
-                    });
-                }
-            });
-        }
-    });
-    
-    return aggregated;
-}
-
-// --- ADMIN TOOLS, GRID RENDERING, and CALCULATION LOGIC ---
+// --- Admin Tools, Data Entry Grid Logic (Mostly kept from previous versions) ---
 
 window.renderConfigLists = function() {
     const diseaseListUl = document.getElementById('diseaseList');
@@ -765,31 +1008,34 @@ window.populateFilterDropdowns = function() {
     const reportSelect = document.getElementById('reportDiseaseSelect');
 
     const populate = (select, includeAll) => {
-        const currentVal = select.value;
+        const currentVal = Array.from(select.options).filter(opt => opt.selected).map(opt => opt.value);
         select.innerHTML = '';
         if (includeAll) {
             const allOption = document.createElement('option');
             allOption.value = 'all';
             allOption.textContent = 'All Diseases';
+            allOption.selected = true;
             select.appendChild(allOption);
         }
         window.DISEASES.forEach(d => {
             const option = document.createElement('option');
             option.value = d;
             option.textContent = d.replace(/_/g, ' ');
+            if (currentVal.includes(d) || (!includeAll && currentVal.length === 0 && d === window.DISEASES[0])) {
+                option.selected = true; // Retain selection or select first for entry grid
+            }
             select.appendChild(option);
         });
-        if (currentVal && Array.from(select.options).some(opt => opt.value === currentVal)) {
-            select.value = currentVal;
-        } else if (!includeAll && window.DISEASES.length > 0) {
-              select.value = window.DISEASES[0];
-        } else if (includeAll) {
-              select.value = 'all';
+
+        // Ensure at least one option is selected in multi-select for reporting
+        if (includeAll && select.selectedOptions.length === 0 && select.options.length > 0) {
+            select.options[0].selected = true;
         }
     };
 
     populate(entrySelect, false);
     populate(reportSelect, true);
+    window.populateLocationAndIntervalFilters();
 };
 
 window.saveConfig = async function() {
@@ -814,6 +1060,7 @@ window.saveConfig = async function() {
     }
 };
 
+// Data Entry Grid Structure (Uses ALL locations/intervals)
 window.renderGridStructure = function(tableId, isInput = true) {
     const table = document.getElementById(tableId);
     if (!table) return;
@@ -894,12 +1141,14 @@ window.renderGridStructure = function(tableId, isInput = true) {
     table.innerHTML = html;
 };
 
+
 window.renderEntryGrid = function() {
     window.renderGridStructure('dataGrid', true);
     window.calculateTotals('dataGrid');
 };
 
 window.renderReportGrid = function() {
+    // Initial render of the empty grid structure for reporting (uses all locations/intervals)
     window.renderGridStructure('reportGrid', false);
     window.calculateTotals('reportGrid');
 };
@@ -918,14 +1167,9 @@ window.loadDataIntoGrid = function(data, tableId) {
     if (isInput) {
         window.clearGridInputs();
     } else {
-          // Clear all report data cells, but leave sticky columns and totals alone for now
-          document.querySelectorAll('#reportGrid td').forEach(td => {
-            if (td.id && (td.id.startsWith('report_') || td.id.startsWith('row_total_') || td.id.startsWith('col_total_') || td.id.startsWith('grand_total_'))) {
-                 // Check if it's a report data cell (e.g., report_loc_M_0_1)
-                 if (td.id.startsWith('report_')) {
-                    td.textContent = '0';
-                 }
-            }
+          // Clear all report data cells
+          document.querySelectorAll('#reportGrid td[id^="report_"]').forEach(td => {
+            td.textContent = '0';
           });
     }
     
@@ -966,82 +1210,14 @@ window.loadDataIntoGrid = function(data, tableId) {
     window.calculateTotals(tableId); 
 };
 
-window.calculateTotals = function(tableId) {
-    const isInput = tableId === 'dataGrid';
-    let grandTotalM = 0;
-    let grandTotalF = 0;
-
-    const colTotals = { M: {}, F: {} };
-    AGE_INTERVALS.forEach(int => { colTotals.M[int] = 0; colTotals.F[int] = 0; });
-
-    window.LOCATIONS.forEach(location => {
-        const locationId = location.replace(/[^a-zA-Z0-9]/g, '_');
-        let rowTotalM = 0;
-        let rowTotalF = 0;
-
-        AGE_INTERVALS.forEach(interval => {
-            const keyM = `M_${interval}`;
-            const keyF = `F_${interval}`;
-            
-            let mCount = 0;
-            let fCount = 0;
-
-            if (isInput) {
-                const mInput = document.getElementById(`input_${locationId}_${keyM}`);
-                const fInput = document.getElementById(`input_${locationId}_${keyF}`);
-                mCount = parseInt(mInput ? mInput.value : 0) || 0;
-                fCount = parseInt(fInput ? fInput.value : 0) || 0;
-            } else {
-                const mCell = document.getElementById(`report_${locationId}_${keyM}`);
-                const fCell = document.getElementById(`report_${locationId}_${keyF}`);
-                mCount = parseInt(mCell ? mCell.textContent : 0) || 0;
-                fCount = parseInt(fCell ? fCell.textContent : 0) || 0;
-            }
-
-            rowTotalM += mCount;
-            rowTotalF += fCount;
-
-            colTotals.M[interval] += mCount;
-            colTotals.F[interval] += fCount;
-        });
-
-        const rowTotalMEl = document.getElementById(`row_total_M_${locationId}_${tableId}`);
-        const rowTotalFEl = document.getElementById(`row_total_F_${locationId}_${tableId}`);
-        const rowTotalGEl = document.getElementById(`row_total_G_${locationId}_${tableId}`);
-
-        if (rowTotalMEl) rowTotalMEl.textContent = rowTotalM;
-        if (rowTotalFEl) rowTotalFEl.textContent = rowTotalF;
-        if (rowTotalGEl) rowTotalGEl.textContent = rowTotalM + rowTotalF;
-
-        grandTotalM += rowTotalM;
-        grandTotalF += rowTotalF;
-    });
-
-    AGE_INTERVALS.forEach(interval => {
-        const colTotalMEl = document.getElementById(`col_total_M_${interval}_${tableId}`);
-        const colTotalFEl = document.getElementById(`col_total_F_${interval}_${tableId}`);
-        if (colTotalMEl) colTotalMEl.textContent = colTotals.M[interval];
-        if (colTotalFEl) colTotalFEl.textContent = colTotals.F[interval];
-    });
-
-    const grandTotalMEl = document.getElementById(`grand_total_M_${tableId}`);
-    const grandTotalFEl = document.getElementById(`grand_total_F_${tableId}`);
-    const grandTotalGEl = document.getElementById(`grand_total_G_${tableId}`);
-
-    if (grandTotalMEl) grandTotalMEl.textContent = grandTotalM;
-    if (grandTotalFEl) grandTotalFEl.textContent = grandTotalF;
-    if (grandTotalGEl) grandTotalGEl.textContent = grandTotalM + grandTotalF;
-};
-
 window.collectGridData = function() {
     const data = {};
     
     window.LOCATIONS.forEach(location => {
         const locationId = location.replace(/[^a-zA-Z0-9]/g, '_');
-        data[locationId] = {};
         
-        // Flag to track if this location has any non-zero data
         let hasData = false;
+        const locationData = {};
         
         AGE_INTERVALS.forEach(interval => {
             const keyM = `M_${interval}`;
@@ -1052,17 +1228,16 @@ window.collectGridData = function() {
             const mCount = parseInt(mInput ? mInput.value : 0) || 0;
             const fCount = parseInt(fInput ? fInput.value : 0) || 0;
             
-            data[locationId][keyM] = mCount;
-            data[locationId][keyF] = fCount;
+            locationData[keyM] = mCount;
+            locationData[keyF] = fCount;
             
             if (mCount > 0 || fCount > 0) {
                 hasData = true;
             }
         });
         
-        // Optional: Remove location entry if all data is zero
-        if (!hasData) {
-            delete data[locationId];
+        if (hasData) {
+            data[locationId] = locationData;
         }
     });
     return data;
