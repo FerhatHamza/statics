@@ -4,6 +4,7 @@ body {
     font-family: 'Inter', sans-serif;
     background-color: #f3f4f6;
 }
+
 /* Style for editable cells */
 .data-input {
     width: 100%;
@@ -21,6 +22,7 @@ body {
     background-color: #e5e7eb;
     box-shadow: 0 0 0 2px #3b82f6;
 }
+
 /* Grid table styling */
 #dataGrid th, #dataGrid td, #reportGrid th, #reportGrid td {
     padding: 0;
@@ -54,12 +56,28 @@ body {
     text-align: left;
     padding-left: 12px !important;
 }
+
+/* Container for the scrollable grid */
 .grid-container {
     overflow-x: auto;
     max-width: 100vw;
     border: 1px solid #d1d5db;
     border-radius: 0.5rem;
 }
+/* Ensure sticky headers and footers work */
+#dataGrid thead, #reportGrid thead {
+    position: sticky;
+    top: 0;
+    z-index: 20;
+}
+#dataGrid tfoot, #reportGrid tfoot {
+    position: sticky;
+    bottom: 0;
+    z-index: 20;
+    box-shadow: 0 -2px 5px rgba(0, 0, 0, 0.1);
+}
+
+/* Tab styling */
 .tab-button {
     padding: 10px 20px;
     border-radius: 0.5rem 0.5rem 0 0;
