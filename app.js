@@ -64,14 +64,16 @@ window.onload = async function() {
     document.getElementById('entryDiseaseSelect').addEventListener('change', () => window.listenForEntryDataChanges());
 
     // === FIX: Add event listeners for Admin buttons to ensure functionality ===
+    // 1. Add Disease Button
     const addDiseaseBtn = document.getElementById('addDiseaseButton');
     if (addDiseaseBtn) addDiseaseBtn.addEventListener('click', window.addDisease);
 
+    // 2. Add Location Button
     const addLocationBtn = document.getElementById('addLocationButton');
     if (addLocationBtn) addLocationBtn.addEventListener('click', window.addLocation);
 
+    // 3. Commit Config Button
     const saveConfigBtn = document.getElementById('saveConfigButton');
-    // Save button handles manual saves of config changes if it exists
     if (saveConfigBtn) saveConfigBtn.addEventListener('click', window.saveConfig);
     // =========================================================================
 };
@@ -307,6 +309,7 @@ window.addDisease = function() {
     
     window.DISEASES.push(diseaseId);
     input.value = '';
+    // We call saveConfig here to instantly update the backend and UI lists
     window.saveConfig();
 };
 
@@ -329,6 +332,7 @@ window.addLocation = function() {
     if (!name.includes(':')) {
           document.getElementById('statusMessage').textContent = "Location must be in the format 'EPSP: Commune/Secteur'.";
           document.getElementById('statusMessage').className = "mb-4 p-3 rounded-lg text-sm bg-red-100 text-red-700";
+          document.getElementById('statusMessage').style.display = 'block';
           return;
     }
     
@@ -341,6 +345,7 @@ window.addLocation = function() {
     
     window.LOCATIONS.push(name);
     input.value = '';
+    // We call saveConfig here to instantly update the backend and UI lists
     window.saveConfig();
 };
 
