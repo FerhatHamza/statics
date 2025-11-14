@@ -62,6 +62,18 @@ window.onload = async function() {
     // Set up initial event listeners
     document.getElementById('entryMonthSelect').addEventListener('change', () => window.listenForEntryDataChanges());
     document.getElementById('entryDiseaseSelect').addEventListener('change', () => window.listenForEntryDataChanges());
+
+    // === FIX: Add event listeners for Admin buttons to ensure functionality ===
+    const addDiseaseBtn = document.getElementById('addDiseaseButton');
+    if (addDiseaseBtn) addDiseaseBtn.addEventListener('click', window.addDisease);
+
+    const addLocationBtn = document.getElementById('addLocationButton');
+    if (addLocationBtn) addLocationBtn.addEventListener('click', window.addLocation);
+
+    const saveConfigBtn = document.getElementById('saveConfigButton');
+    // Save button handles manual saves of config changes if it exists
+    if (saveConfigBtn) saveConfigBtn.addEventListener('click', window.saveConfig);
+    // =========================================================================
 };
 
 /**
@@ -105,7 +117,7 @@ window.switchView = async function(view) {
     if (view === 'entry') {
         await window.listenForEntryDataChanges();
     } else if (view === 'reporting') {
-         await window.fetchAllMonthlyData();
+          await window.fetchAllMonthlyData();
     } else if (view === 'admin') {
         // Config is already loaded, just ensure it's rendered
         window.renderConfigLists();
@@ -154,9 +166,9 @@ window.listenForEntryDataChanges = async function() {
  */
 window.saveEntry = async function() {
     if (window.LOCATIONS.length === 0) {
-         document.getElementById('statusMessage').textContent = "Cannot save: No locations defined. Use Admin Tools first.";
-         document.getElementById('statusMessage').className = "mb-4 p-3 rounded-lg text-sm bg-red-100 text-red-700";
-         return;
+          document.getElementById('statusMessage').textContent = "Cannot save: No locations defined. Use Admin Tools first.";
+          document.getElementById('statusMessage').className = "mb-4 p-3 rounded-lg text-sm bg-red-100 text-red-700";
+          return;
     }
 
     const monthId = document.getElementById('entryMonthSelect').value;
@@ -315,9 +327,9 @@ window.addLocation = function() {
     if (!name) return;
 
     if (!name.includes(':')) {
-         document.getElementById('statusMessage').textContent = "Location must be in the format 'EPSP: Commune/Secteur'.";
-         document.getElementById('statusMessage').className = "mb-4 p-3 rounded-lg text-sm bg-red-100 text-red-700";
-         return;
+          document.getElementById('statusMessage').textContent = "Location must be in the format 'EPSP: Commune/Secteur'.";
+          document.getElementById('statusMessage').className = "mb-4 p-3 rounded-lg text-sm bg-red-100 text-red-700";
+          return;
     }
     
     if (window.LOCATIONS.includes(name)) {
@@ -367,7 +379,7 @@ window.populateFilterDropdowns = function() {
         if (currentVal && Array.from(select.options).some(opt => opt.value === currentVal)) {
             select.value = currentVal;
         } else if (!includeAll && window.DISEASES.length > 0) {
-             select.value = window.DISEASES[0];
+              select.value = window.DISEASES[0];
         }
     };
 
@@ -379,36 +391,36 @@ window.populateFilterDropdowns = function() {
 // --- GRID RENDERING AND CALCULATION ---
 
 window.setupReportingFilters = function() {
-     const currentYear = new Date().getFullYear();
-     const startYear = 2024; 
-     
-     const monthPeriods = [];
-     for (let y = currentYear; y >= startYear; y--) {
-         for (let m = 12; m >= 1; m--) {
-             const monthStr = m.toString().padStart(2, '0');
-             monthPeriods.push({
-                 id: `${y}-${monthStr}`,
-                 label: `${y}-${monthStr}`,
-                 months: [monthStr]
-             });
-         }
-     }
-     REPORT_PERIODS.monthly = monthPeriods;
-     REPORT_PERIODS.quarterly = [
-        { id: "Q1", label: "Q1 (Jan-Mar)", months: ["01", "02", "03"] },
-        { id: "Q2", label: "Q2 (Apr-Jun)", months: ["04", "05", "06"] },
-        { id: "Q3", label: "Q3 (Jul-Sep)", months: ["07", "08", "09"] },
-        { id: "Q4", label: "Q4 (Oct-Dec)", months: ["10", "11", "12"] }
-    ];
-    REPORT_PERIODS.semiannual = [
-        { id: "S1", label: "S1 (Jan-Jun)", months: ["01", "02", "03", "04", "05", "06"] },
-        { id: "S2", label: "S2 (Jul-Dec)", months: ["07", "08", "09", "10", "11", "12"] }
-    ];
-    REPORT_PERIODS.annual = [
-        { id: "FULL", label: "Full Year", months: ["01", "02", "03", "04", "05", "06", "07", "08", "09", "10", "11", "12"] }
-    ];
-     
-     updateReportFilters();
+      const currentYear = new Date().getFullYear();
+      const startYear = 2024; 
+      
+      const monthPeriods = [];
+      for (let y = currentYear; y >= startYear; y--) {
+          for (let m = 12; m >= 1; m--) {
+              const monthStr = m.toString().padStart(2, '0');
+              monthPeriods.push({
+                  id: `${y}-${monthStr}`,
+                  label: `${y}-${monthStr}`,
+                  months: [monthStr]
+              });
+          }
+      }
+      REPORT_PERIODS.monthly = monthPeriods;
+      REPORT_PERIODS.quarterly = [
+          { id: "Q1", label: "Q1 (Jan-Mar)", months: ["01", "02", "03"] },
+          { id: "Q2", label: "Q2 (Apr-Jun)", months: ["04", "05", "06"] },
+          { id: "Q3", label: "Q3 (Jul-Sep)", months: ["07", "08", "09"] },
+          { id: "Q4", label: "Q4 (Oct-Dec)", months: ["10", "11", "12"] }
+      ];
+      REPORT_PERIODS.semiannual = [
+          { id: "S1", label: "S1 (Jan-Jun)", months: ["01", "02", "03", "04", "05", "06"] },
+          { id: "S2", label: "S2 (Jul-Dec)", months: ["07", "08", "09", "10", "11", "12"] }
+      ];
+      REPORT_PERIODS.annual = [
+          { id: "FULL", label: "Full Year", months: ["01", "02", "03", "04", "05", "06", "07", "08", "09", "10", "11", "12"] }
+      ];
+      
+      updateReportFilters();
 }
 
 window.updateReportFilters = function() {
@@ -421,22 +433,22 @@ window.updateReportFilters = function() {
     const periods = REPORT_PERIODS[type];
     
     if (type === 'monthly') {
-         periods.forEach(p => {
-             const option = document.createElement('option');
-             option.value = p.id;
-             option.textContent = p.label;
-             periodSelect.appendChild(option);
-         });
-         periodSelect.value = document.getElementById('entryMonthSelect').value;
+          periods.forEach(p => {
+              const option = document.createElement('option');
+              option.value = p.id;
+              option.textContent = p.label;
+              periodSelect.appendChild(option);
+          });
+          periodSelect.value = document.getElementById('entryMonthSelect').value;
     } else {
-         for (let y = currentYear; y >= 2024; y--) {
-            periods.forEach(p => {
-                 const option = document.createElement('option');
-                 option.value = `${y}_${p.id}`;
-                 option.textContent = `${y} - ${p.label}`;
-                 periodSelect.appendChild(option);
-            });
-         }
+          for (let y = currentYear; y >= 2024; y--) {
+              periods.forEach(p => {
+                  const option = document.createElement('option');
+                  option.value = `${y}_${p.id}`;
+                  option.textContent = `${y} - ${p.label}`;
+                  periodSelect.appendChild(option);
+              });
+          }
     }
 };
 
@@ -447,10 +459,10 @@ window.renderGridStructure = function(tableId, isInput = true) {
     let html = '';
 
     if (window.LOCATIONS.length === 0) {
-         table.innerHTML = `<tr><td colspan="${(AGE_INTERVALS.length * 2) + 3}" class="text-center p-8 text-gray-500">
+          table.innerHTML = `<tr><td colspan="${(AGE_INTERVALS.length * 2) + 3}" class="text-center p-8 text-gray-500">
             No locations defined. Please add locations in the Admin Tools section.
-         </td></tr>`;
-         return;
+          </td></tr>`;
+          return;
     }
     
     html += '<thead>';
@@ -543,11 +555,11 @@ window.loadDataIntoGrid = function(data, tableId) {
     if (isInput) {
         window.clearGridInputs();
     } else {
-         document.querySelectorAll('#reportGrid td').forEach(td => {
+          document.querySelectorAll('#reportGrid td').forEach(td => {
             if (!td.classList.contains('sticky-col') && !td.classList.contains('total-cell')) {
                 td.textContent = '0';
             }
-         });
+          });
     }
     
     if (!data) return;
@@ -674,19 +686,19 @@ window.loadAggregatedReport = async function() {
     const diseaseFilter = document.getElementById('reportDiseaseSelect').value;
     
     if (window.LOCATIONS.length === 0) {
-         document.getElementById('reportGrid').innerHTML = `<tr><td colspan="${(AGE_INTERVALS.length * 2) + 3}" class="text-center p-8 text-gray-500">
+          document.getElementById('reportGrid').innerHTML = `<tr><td colspan="${(AGE_INTERVALS.length * 2) + 3}" class="text-center p-8 text-gray-500">
             Cannot generate report: No locations defined.
-         </td></tr>`;
-         document.getElementById('reportTotalCount').textContent = "";
-         return;
+          </td></tr>`;
+          document.getElementById('reportTotalCount').textContent = "";
+          return;
     }
     
     const { fullMonthStrings, year } = getAggregationMonths(reportType, periodValue);
     
     if (fullMonthStrings.length === 0) {
-         document.getElementById('statusMessage').textContent = "Please select a valid period.";
-         document.getElementById('statusMessage').className = "mb-4 p-3 rounded-lg text-sm bg-yellow-100 text-yellow-700";
-         return;
+          document.getElementById('statusMessage').textContent = "Please select a valid period.";
+          document.getElementById('statusMessage').className = "mb-4 p-3 rounded-lg text-sm bg-yellow-100 text-yellow-700";
+          return;
     }
     
     const aggregatedData = aggregateData(fullMonthStrings, year, diseaseFilter);
@@ -697,23 +709,23 @@ window.loadAggregatedReport = async function() {
 };
 
 function getAggregationMonths(type, periodValue) {
-     const [yearStr, periodId] = periodValue.split('_');
-     const year = yearStr || periodValue.substring(0, 4); 
-     
-     let monthsToAggregate = [];
-     
-     if (type === 'monthly') {
-         monthsToAggregate = [periodValue.substring(5, 7)];
-     } else {
-         const periods = REPORT_PERIODS[type].find(p => p.id === periodId);
-         if (periods) {
-             monthsToAggregate = periods.months;
-         }
-     }
-     
-     const fullMonthStrings = monthsToAggregate.map(m => `${year}-${m}`);
+      const [yearStr, periodId] = periodValue.split('_');
+      const year = yearStr || periodValue.substring(0, 4); 
+      
+      let monthsToAggregate = [];
+      
+      if (type === 'monthly') {
+          monthsToAggregate = [periodValue.substring(5, 7)];
+      } else {
+          const periods = REPORT_PERIODS[type].find(p => p.id === periodId);
+          if (periods) {
+              monthsToAggregate = periods.months;
+          }
+      }
+      
+      const fullMonthStrings = monthsToAggregate.map(m => `${year}-${m}`);
 
-     return { fullMonthStrings, year: year };
+      return { fullMonthStrings, year: year };
 }
 
 function aggregateData(fullMonthStrings, year, diseaseFilter) {
@@ -738,18 +750,18 @@ function aggregateData(fullMonthStrings, year, diseaseFilter) {
             const reportData = monthlyReport.data;
             
             window.LOCATIONS.forEach(location => {
-                 const locationId = location.replace(/[^a-zA-Z0-9]/g, '_');
-                 const locData = reportData[locationId];
-                 
-                 if (locData) {
-                     AGE_INTERVALS.forEach(interval => {
-                         const keyM = `M_${interval}`;
-                         const keyF = `F_${interval}`;
-                         
-                         aggregated[locationId][keyM] += locData[keyM] || 0;
-                         aggregated[locationId][keyF] += locData[keyF] || 0;
-                     });
-                 }
+                const locationId = location.replace(/[^a-zA-Z0-9]/g, '_');
+                const locData = reportData[locationId];
+                
+                if (locData) {
+                    AGE_INTERVALS.forEach(interval => {
+                        const keyM = `M_${interval}`;
+                        const keyF = `F_${interval}`;
+                        
+                        aggregated[locationId][keyM] += locData[keyM] || 0;
+                        aggregated[locationId][keyF] += locData[keyF] || 0;
+                    });
+                }
             });
         }
     });
