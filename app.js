@@ -6,7 +6,7 @@ const API_BASE_URL = 'https://mehidistatics-api.ferhathamza17.workers.dev/api/v1
 // This simulates the user authentication ID provided by the environment
 const userId = typeof __app_id !== 'undefined' ? `user-${__app_id}` : 'guest-user-1234'; 
 
-// Global data stores (no more Firebase SDK required)
+// Global data stores
 window.allMonthlyData = {}; 
 window.DISEASES = []; 
 window.LOCATIONS = []; 
@@ -15,8 +15,8 @@ const AGE_INTERVALS = [
     "0_1", "2_4", "5_9", "10_14", "15_19", "20_44", "45_64", "65_plus"
 ];
 
+// Configuration for Quarterly, Semi-Annual, and Annual report periods
 const REPORT_PERIODS = {
-    // These will be defined in window.setupReportingFilters
     quarterly: [], semiannual: [], annual: [], monthly: [] 
 };
 
@@ -59,23 +59,26 @@ window.onload = async function() {
     // Start the app by loading the config
     await window.loadConfigAndRerender();
     
-    // Set up initial event listeners
+    // Set up initial event listeners for Data Entry
     document.getElementById('entryMonthSelect').addEventListener('change', () => window.listenForEntryDataChanges());
     document.getElementById('entryDiseaseSelect').addEventListener('change', () => window.listenForEntryDataChanges());
+    document.getElementById('saveButton').addEventListener('click', window.saveEntry);
     
-    // Add event listeners for Reporting Filters (Crucial for fixing the reporting bug)
+    // Add event listeners for Reporting Filters (CRITICAL FIX)
     const reportTypeSelect = document.getElementById('reportTypeSelect');
     const reportPeriodSelect = document.getElementById('reportPeriodSelect');
     const reportDiseaseSelect = document.getElementById('reportDiseaseSelect');
 
+    // Changing Report Type updates periods and triggers new report load
     if (reportTypeSelect) reportTypeSelect.addEventListener('change', () => { 
         window.updateReportFilters(); 
         window.loadAggregatedReport();
     });
+    // Changing Period or Disease triggers report load
     if (reportPeriodSelect) reportPeriodSelect.addEventListener('change', window.loadAggregatedReport);
     if (reportDiseaseSelect) reportDiseaseSelect.addEventListener('change', window.loadAggregatedReport);
 
-    // === Add event listeners for Admin buttons to ensure functionality ===
+    // === Add event listeners for Admin buttons ===
     const addDiseaseBtn = document.getElementById('addDiseaseButton');
     if (addDiseaseBtn) addDiseaseBtn.addEventListener('click', window.addDisease);
 
@@ -98,14 +101,12 @@ window.loadConfigAndRerender = async function() {
     window.DISEASES = config.diseases || [];
     window.LOCATIONS = config.locations || [];
 
-    console.log("Config loaded:", window.DISEASES.length, "diseases,", window.LOCATIONS.length, "locations.");
-
     // Re-render all parts of the UI that depend on these lists
     window.renderConfigLists();
     window.populateFilterDropdowns();
     window.renderEntryGrid();
     window.renderReportGrid();
-    window.setupReportingFilters();
+    window.setupReportingFilters(); // Initialize periods and update filters
     window.listenForEntryDataChanges(); // Initial data load for entry view
 };
 
@@ -113,12 +114,14 @@ window.loadConfigAndRerender = async function() {
  * Switches between the Data Entry, Reporting, and Admin views.
  */
 window.switchView = async function(view) {
+    // Hide all views and mark tabs inactive
     ['entry', 'reporting', 'admin'].forEach(v => {
         document.getElementById(`${v}View`).classList.add('hidden');
         document.getElementById(`${v}Tab`).classList.remove('tab-active');
         document.getElementById(`${v}Tab`).classList.add('tab-inactive');
     });
 
+    // Show the selected view and mark its tab active
     document.getElementById(`${view}View`).classList.remove('hidden');
     document.getElementById(`${view}Tab`).classList.add('tab-active');
     document.getElementById(`${view}Tab`).classList.remove('tab-inactive');
@@ -127,9 +130,11 @@ window.switchView = async function(view) {
     if (view === 'entry') {
         await window.listenForEntryDataChanges();
     } else if (view === 'reporting') {
-          await window.fetchAllMonthlyData();
+        await window.fetchAllMonthlyData();
+        // Ensure filters are correctly populated and a report is run on view change
+        window.updateReportFilters();
+        window.loadAggregatedReport();
     } else if (view === 'admin') {
-        // Config is already loaded, just ensure it's rendered
         window.renderConfigLists();
     }
 }
@@ -214,6 +219,7 @@ window.saveEntry = async function() {
     }
 };
 
+
 // --- REPORTING VIEW LOGIC ---
 
 /**
@@ -231,7 +237,6 @@ window.fetchAllMonthlyData = async function() {
         document.getElementById('statusMessage').textContent = `${Object.keys(window.allMonthlyData).length} monthly records cached for reporting.`;
         document.getElementById('statusMessage').className = "mb-4 p-3 rounded-lg text-sm bg-green-100 text-green-700";
         
-        window.loadAggregatedReport(); // Refresh report with new data
     } else {
         window.allMonthlyData = {};
         document.getElementById('statusMessage').textContent = `Error fetching data for reports.`;
@@ -239,170 +244,9 @@ window.fetchAllMonthlyData = async function() {
     }
 }
 
-// --- ADMIN TOOLS LOGIC ---
-
 /**
- * Saves the current config (Diseases/Locations) back to the Worker API.
+ * Defines the available report periods (Q1, S1, etc.) for aggregation.
  */
-window.saveConfig = async function() {
-    const payload = {
-        diseases: window.DISEASES,
-        locations: window.LOCATIONS
-    };
-
-    const result = await makeApiCall('/config', 'POST', payload);
-
-    if (result && result.success) {
-        document.getElementById('statusMessage').textContent = "Configuration saved successfully.";
-        document.getElementById('statusMessage').className = "mb-4 p-3 rounded-lg text-sm bg-green-100 text-green-700";
-        // Re-render UI components dependent on the config
-        window.renderConfigLists();
-        window.populateFilterDropdowns();
-        window.renderEntryGrid();
-        window.renderReportGrid();
-        window.listenForEntryDataChanges();
-    } else {
-        document.getElementById('statusMessage').textContent = `Error saving configuration: ${result ? result.details : 'Check worker logs.'}`;
-        document.getElementById('statusMessage').className = "mb-4 p-3 rounded-lg text-sm bg-red-100 text-red-700";
-    }
-    document.getElementById('statusMessage').style.display = 'block';
-}
-
-/**
- * Renders the lists in the Admin View.
- */
-window.renderConfigLists = function() {
-    const diseaseListUl = document.getElementById('diseaseList');
-    const locationListUl = document.getElementById('locationList');
-
-    // Render Diseases
-    diseaseListUl.innerHTML = window.DISEASES.map(d => `
-        <li class="flex justify-between items-center p-2 bg-white rounded shadow-sm border border-yellow-300 text-yellow-900">
-            <span class="truncate">${d}</span>
-            <button onclick="deleteDisease('${d}')" class="text-red-500 hover:text-red-700 ml-4 font-bold">
-                &times;
-            </button>
-        </li>
-    `).join('');
-
-    // Render Locations
-    locationListUl.innerHTML = window.LOCATIONS.map(l => `
-        <li class="flex justify-between items-center p-2 bg-white rounded shadow-sm border border-teal-300 text-teal-900">
-            <span class="truncate">${l}</span>
-            <button onclick="deleteLocation('${l}')" class="text-red-500 hover:text-red-700 ml-4 font-bold">
-                &times;
-            </button>
-        </li>
-    `).join('');
-};
-
-/**
- * Adds a new disease.
- */
-window.addDisease = function() {
-    const input = document.getElementById('newDiseaseInput');
-    let name = input.value.trim();
-    if (!name) return;
-    
-    // Clean up name and create ID
-    const diseaseId = name.replace(/[^a-zA-Z0-9\s]/g, '').trim().replace(/\s+/g, '_');
-
-    if (window.DISEASES.includes(diseaseId)) {
-        // Use a standard non-alert message box for user feedback
-        document.getElementById('statusMessage').textContent = "Disease already exists or generates a duplicate ID.";
-        document.getElementById('statusMessage').className = "mb-4 p-3 rounded-lg text-sm bg-red-100 text-red-700";
-        document.getElementById('statusMessage').style.display = 'block';
-        return;
-    }
-    
-    window.DISEASES.push(diseaseId);
-    input.value = '';
-    // We call saveConfig here to instantly update the backend and UI lists
-    window.saveConfig();
-};
-
-/**
- * Deletes a disease.
- */
-window.deleteDisease = function(id) {
-    window.DISEASES = window.DISEASES.filter(d => d !== id);
-    window.saveConfig();
-};
-
-/**
- * Adds a new location.
- */
-window.addLocation = function() {
-    const input = document.getElementById('newLocationInput');
-    const name = input.value.trim();
-    if (!name) return;
-
-    if (!name.includes(':')) {
-          document.getElementById('statusMessage').textContent = "Location must be in the format 'EPSP: Commune/Secteur'.";
-          document.getElementById('statusMessage').className = "mb-4 p-3 rounded-lg text-sm bg-red-100 text-red-700";
-          document.getElementById('statusMessage').style.display = 'block';
-          return;
-    }
-    
-    if (window.LOCATIONS.includes(name)) {
-        document.getElementById('statusMessage').textContent = "Location already exists.";
-        document.getElementById('statusMessage').className = "mb-4 p-3 rounded-lg text-sm bg-red-100 text-red-700";
-        document.getElementById('statusMessage').style.display = 'block';
-        return;
-    }
-    
-    window.LOCATIONS.push(name);
-    input.value = '';
-    // We call saveConfig here to instantly update the backend and UI lists
-    window.saveConfig();
-};
-
-/**
- * Deletes a location.
- */
-window.deleteLocation = function(name) {
-    window.LOCATIONS = window.LOCATIONS.filter(l => l !== name);
-    window.saveConfig();
-};
-
-/**
- * Populates the Disease dropdowns in the Entry and Reporting views.
- */
-window.populateFilterDropdowns = function() {
-    const entrySelect = document.getElementById('entryDiseaseSelect');
-    const reportSelect = document.getElementById('reportDiseaseSelect');
-
-    // Helper to populate
-    const populate = (select, includeAll) => {
-        const currentVal = select.value;
-        select.innerHTML = '';
-        if (includeAll) {
-            const allOption = document.createElement('option');
-            allOption.value = 'all';
-            allOption.textContent = 'All Diseases';
-            select.appendChild(allOption);
-        }
-        window.DISEASES.forEach(d => {
-            const option = document.createElement('option');
-            option.value = d;
-            option.textContent = d.replace(/_/g, ' ');
-            select.appendChild(option);
-        });
-        // Restore selection if possible
-        if (currentVal && Array.from(select.options).some(opt => opt.value === currentVal)) {
-            select.value = currentVal;
-        } else if (!includeAll && window.DISEASES.length > 0) {
-              select.value = window.DISEASES[0];
-        }
-    };
-
-    populate(entrySelect, false);
-    populate(reportSelect, true);
-};
-
-
-// --- GRID RENDERING AND CALCULATION ---
-
 window.setupReportingFilters = function() {
       const currentYear = new Date().getFullYear();
       const startYear = 2024; 
@@ -437,23 +281,19 @@ window.setupReportingFilters = function() {
 }
 
 /**
- * Updates the Period dropdown based on the selected Report Type (monthly, quarterly, etc.).
- * Includes robust checks for element existence and default value assignment (Fix for app.js:444).
+ * Updates the Period dropdown based on the selected Report Type.
  */
 window.updateReportFilters = function() {
     const reportTypeSelect = document.getElementById('reportTypeSelect');
     const periodSelect = document.getElementById('reportPeriodSelect');
 
-    if (!reportTypeSelect || !periodSelect) {
-        console.error("Error: Required reporting filter elements (selects) not found.");
-        return; 
-    }
+    if (!reportTypeSelect || !periodSelect) return; 
 
-    // Ensure type has a value, defaulting to 'monthly' if empty
+    // Enforce default value if none is selected
     let type = reportTypeSelect.value;
     if (!type || type === '') {
         type = 'monthly';
-        reportTypeSelect.value = type; // Set the default value on the element
+        reportTypeSelect.value = type; 
     }
     
     const currentYear = new Date().getFullYear();
@@ -461,14 +301,10 @@ window.updateReportFilters = function() {
     periodSelect.innerHTML = '';
     
     const periods = REPORT_PERIODS[type];
-    
-    // Guard clause to prevent crashing if 'periods' array is invalid/undefined
-    if (!periods) {
-        console.error(`Error: Invalid report type selected: ${type}`); 
-        return;
-    }
+    if (!periods) return;
 
     if (type === 'monthly') {
+          // Monthly periods are already year-month formatted
           periods.forEach(p => {
               const option = document.createElement('option');
               option.value = p.id;
@@ -476,8 +312,15 @@ window.updateReportFilters = function() {
               periodSelect.appendChild(option);
           });
           // Default to the current month if available
-          periodSelect.value = document.getElementById('entryMonthSelect').value;
+          const currentMonthValue = document.getElementById('entryMonthSelect').value;
+          if (Array.from(periodSelect.options).some(opt => opt.value === currentMonthValue)) {
+            periodSelect.value = currentMonthValue;
+          } else if (periodSelect.options.length > 0) {
+            periodSelect.value = periodSelect.options[0].value;
+          }
+
     } else {
+          // Quarterly, Semi-Annual, Annual periods are prefixed by year
           for (let y = currentYear; y >= 2024; y--) {
               periods.forEach(p => {
                   const option = document.createElement('option');
@@ -486,6 +329,486 @@ window.updateReportFilters = function() {
                   periodSelect.appendChild(option);
               });
           }
+          // Default to the latest period in the list
+          if (periodSelect.options.length > 0) {
+              periodSelect.value = periodSelect.options[0].value;
+          }
+    }
+};
+
+/**
+ * Loads the aggregated report based on current filter selections.
+ */
+window.loadAggregatedReport = async function() {
+    const reportType = document.getElementById('reportTypeSelect').value;
+    const periodValue = document.getElementById('reportPeriodSelect').value;
+    const diseaseFilter = document.getElementById('reportDiseaseSelect').value;
+    
+    if (window.LOCATIONS.length === 0) {
+          document.getElementById('reportGrid').innerHTML = `<tr><td colspan="${(AGE_INTERVALS.length * 2) + 3}" class="text-center p-8 text-gray-500">
+            Cannot generate report: No locations defined.
+          </td></tr>`;
+          document.getElementById('reportTotalCount').textContent = "Report Total: 0 Cases";
+          d3.select('#reportCharts').html('<p class="text-center text-gray-500 py-8 font-semibold">No locations defined in Admin Tools.</p>');
+          return;
+    }
+    
+    const { fullMonthStrings, year } = getAggregationMonths(reportType, periodValue);
+    
+    if (fullMonthStrings.length === 0) {
+          document.getElementById('statusMessage').textContent = "Please select a valid period.";
+          document.getElementById('statusMessage').className = "mb-4 p-3 rounded-lg text-sm bg-yellow-100 text-yellow-700";
+          d3.select('#reportCharts').html('<p class="text-center text-gray-500 py-8 font-semibold">Select a valid time period.</p>');
+          return;
+    }
+    
+    const aggregatedData = aggregateData(fullMonthStrings, year, diseaseFilter);
+    window.loadDataIntoGrid(aggregatedData, 'reportGrid');
+    
+    // Call the chart rendering function
+    window.renderCharts(aggregatedData, diseaseFilter, periodValue);
+
+    document.getElementById('statusMessage').textContent = `Report loaded for ${diseaseFilter.replace(/_/g, ' ')} for ${periodValue.replace(/_/g, ' - ')}.`;
+    document.getElementById('statusMessage').className = "mb-4 p-3 rounded-lg text-sm bg-blue-100 text-blue-700";
+};
+
+
+// --- D3 CHARTING LOGIC ---
+
+/**
+ * Prepares data and calls the specific chart rendering functions.
+ */
+window.renderCharts = function(aggregatedData, diseaseFilter, periodValue) {
+    const chartContainer = d3.select('#reportCharts');
+    chartContainer.html(''); // Clear previous charts
+
+    const locationTotals = [];
+    const ageIntervalTotals = AGE_INTERVALS.map(int => ({ 
+        interval: int.replace(/_/g, '-').replace('plus', '+'), 
+        M: 0, 
+        F: 0 
+    }));
+    let grandTotal = 0;
+
+    window.LOCATIONS.forEach(location => {
+        const locationId = location.replace(/[^a-zA-Z0-9]/g, '_');
+        let locTotal = 0;
+        
+        AGE_INTERVALS.forEach((interval, index) => {
+            const mCount = aggregatedData[locationId][`M_${interval}`] || 0;
+            const fCount = aggregatedData[locationId][`F_${interval}`] || 0;
+            
+            locTotal += mCount + fCount;
+            ageIntervalTotals[index].M += mCount;
+            ageIntervalTotals[index].F += fCount;
+        });
+        
+        if (locTotal > 0) {
+            // Use only the Commune/Secteur name for cleaner chart labels
+            const locName = location.split(':').length > 1 ? location.split(':')[1].trim() : location;
+            locationTotals.push({ location: locName, total: locTotal });
+        }
+        grandTotal += locTotal;
+    });
+    
+    // Update the total count display
+    document.getElementById('reportTotalCount').textContent = `Report Total: ${grandTotal} Cases`;
+
+    if (grandTotal === 0) {
+        chartContainer.html('<p class="text-center text-gray-500 py-8 font-semibold">No data available for the selected period or disease.</p>');
+        return;
+    }
+    
+    const title = `${diseaseFilter === 'all' ? 'All Diseases' : diseaseFilter.replace(/_/g, ' ')} Report for ${periodValue.replace(/_/g, ' - ')}`;
+
+    // 1. Pictorial Fraction Chart (Donut Chart)
+    if (locationTotals.length > 0) {
+        renderPieChart(chartContainer, locationTotals, grandTotal, title);
+    }
+
+    // 2. Layered Area Chart (Stacked Bar Chart for categorical data)
+    if (ageIntervalTotals.some(d => d.M > 0 || d.F > 0)) {
+        renderStackedBarChart(chartContainer, ageIntervalTotals, title);
+    }
+};
+
+/**
+ * Renders the Pie/Fraction Chart (Total Cases by Location)
+ */
+function renderPieChart(container, data, total, title) {
+    const width = 400, height = 400, margin = 20;
+    const radius = Math.min(width, height) / 2 - margin;
+
+    const chartDiv = container.append('div')
+        .attr('class', 'p-4 bg-white rounded-xl shadow-lg m-4 w-full md:w-[450px]');
+    
+    chartDiv.append('h3').attr('class', 'text-lg font-bold text-center mb-1 text-gray-800').text('Distribution by Location');
+    chartDiv.append('p').attr('class', 'text-sm text-center text-gray-600 mb-4').text(title);
+
+
+    const svg = chartDiv.append('svg')
+        .attr('width', width)
+        .attr('height', height)
+        .append('g')
+        .attr('transform', `translate(${width / 2}, ${height / 2})`);
+
+    const color = d3.scaleOrdinal(d3.schemeCategory10);
+
+    const pie = d3.pie()
+        .value(d => d.total)
+        .sort(null);
+
+    const arc = d3.arc()
+        .innerRadius(radius / 2) // Donut chart for pictorial fraction
+        .outerRadius(radius);
+
+    const outerArc = d3.arc()
+        .innerRadius(radius * 0.9)
+        .outerRadius(radius * 0.9);
+
+    svg.selectAll('slices')
+        .data(pie(data))
+        .enter()
+        .append('path')
+        .attr('d', arc)
+        .attr('fill', d => color(d.data.location))
+        .attr('stroke', 'white')
+        .style('stroke-width', '2px')
+        .style('opacity', 0.8)
+        .append('title')
+        .text(d => `${d.data.location}: ${d.data.total} cases (${d3.format(".1%")(d.data.total / total)})`);
+
+    // Add labels outside the pie
+    svg.selectAll('labels')
+        .data(pie(data))
+        .enter()
+        .append('text')
+        .attr('transform', function(d) {
+            const pos = outerArc.centroid(d);
+            const midAngle = d.startAngle + (d.endAngle - d.startAngle) / 2;
+            pos[0] = radius * 1.05 * (midAngle < Math.PI ? 1 : -1);
+            return `translate(${pos})`;
+        })
+        .style('text-anchor', function(d) {
+            const midAngle = d.startAngle + (d.endAngle - d.startAngle) / 2;
+            return (midAngle < Math.PI ? 'start' : 'end');
+        })
+        .style('font-size', '10px')
+        .text(d => `${d.data.location} (${d3.format(".1%")(d.data.total / total)})`);
+    
+    // Add total label in the center
+     svg.append("text")
+        .attr("text-anchor", "middle")
+        .attr("dominant-baseline", "middle")
+        .style("font-size", "1.5rem")
+        .style("font-weight", "bold")
+        .attr("fill", "#1f2937")
+        .text(total);
+}
+
+/**
+ * Renders the Stacked Bar Chart (Age and Sex Distribution)
+ */
+function renderStackedBarChart(container, data, title) {
+    const margin = { top: 30, right: 30, bottom: 60, left: 60 };
+    const chartWidth = 600; 
+    const chartHeight = 400;
+    const width = chartWidth - margin.left - margin.right;
+    const height = chartHeight - margin.top - margin.bottom;
+
+    const keys = ['M', 'F'];
+    
+    const chartDiv = container.append('div')
+        .attr('class', 'p-4 bg-white rounded-xl shadow-lg m-4 w-full md:w-[650px]');
+
+    chartDiv.append('h3').attr('class', 'text-lg font-bold text-center mb-1 text-gray-800').text('Age and Sex Distribution (Layered Area concept)');
+    chartDiv.append('p').attr('class', 'text-sm text-center text-gray-600 mb-4').text(title);
+
+    const svg = chartDiv.append('svg')
+        .attr('width', width + margin.left + margin.right)
+        .attr('height', height + margin.top + margin.bottom)
+        .append('g')
+        .attr('transform', `translate(${margin.left}, ${margin.top})`);
+
+    // Data processing for stacking
+    const stack = d3.stack().keys(keys).order(d3.stackOrderNone).offset(d3.stackOffsetNone);
+    const stackedData = stack(data);
+
+    // Scales
+    const x = d3.scaleBand()
+        .domain(data.map(d => d.interval))
+        .range([0, width])
+        .padding(0.2);
+
+    const yMax = d3.max(stackedData[stackedData.length - 1], d => d[1]);
+    const y = d3.scaleLinear()
+        .domain([0, yMax])
+        .range([height, 0]);
+
+    const color = d3.scaleOrdinal()
+        .domain(keys)
+        .range(['#3b82f6', '#f472b6']); // Blue for Male (M), Pink for Female (F)
+
+    // Axes
+    svg.append('g')
+        .attr('transform', `translate(0,${height})`)
+        .call(d3.axisBottom(x))
+        .selectAll("text")
+        .style("text-anchor", "end")
+        .attr("dx", "-.8em")
+        .attr("dy", ".15em")
+        .attr("transform", "rotate(-45)");
+
+    svg.append('g')
+        .call(d3.axisLeft(y).ticks(5));
+
+    // Y-Axis Label
+    svg.append("text")
+        .attr("transform", "rotate(-90)")
+        .attr("y", 0 - margin.left + 5)
+        .attr("x", 0 - (height / 2))
+        .attr("dy", "1em")
+        .style("text-anchor", "middle")
+        .style("font-size", "12px")
+        .text("Total Cases");
+
+    // Bars
+    svg.selectAll('.layer')
+        .data(stackedData)
+        .enter().append('g')
+        .attr('class', 'layer')
+        .attr('fill', d => color(d.key))
+        .selectAll('rect')
+        .data(d => d)
+        .enter().append('rect')
+        .attr('x', d => x(d.data.interval))
+        .attr('y', d => y(d[1]))
+        .attr('height', d => y(d[0]) - y(d[1]))
+        .attr('width', x.bandwidth())
+        .attr('rx', 4) // Rounded corners for aesthetics
+        .append('title')
+        .text(d => `${d.data.interval} (${d3.select(this.parentNode).datum().key === 'M' ? 'Male' : 'Female'}): ${d[1] - d[0]} cases`);
+
+    // Legend
+    const legend = svg.append('g')
+        .attr('transform', `translate(${width - 100}, 0)`);
+
+    keys.forEach((key, i) => {
+        const legendRow = legend.append('g')
+            .attr('transform', `translate(0, ${i * 20})`);
+        
+        legendRow.append('rect')
+            .attr('width', 10)
+            .attr('height', 10)
+            .attr('fill', color(key))
+            .attr('rx', 2);
+
+        legendRow.append('text')
+            .attr('x', 15)
+            .attr('y', 10)
+            .style('font-size', '12px')
+            .text(key === 'M' ? 'Male' : 'Female');
+    });
+}
+
+// --- Data Aggregation Helpers ---
+
+function getAggregationMonths(type, periodValue) {
+      const [yearStr, periodId] = periodValue.split('_');
+      const year = yearStr || periodValue.substring(0, 4); 
+      
+      let monthsToAggregate = [];
+      
+      if (type === 'monthly') {
+          monthsToAggregate = [periodValue.substring(5, 7)];
+      } else {
+          const periods = REPORT_PERIODS[type];
+          const periodsConfig = periods ? periods.find(p => p.id === periodId) : null;
+
+          if (periodsConfig) {
+              monthsToAggregate = periodsConfig.months;
+          }
+      }
+      
+      const fullMonthStrings = monthsToAggregate.map(m => `${year}-${m}`);
+
+      return { fullMonthStrings, year: year };
+}
+
+function aggregateData(fullMonthStrings, year, diseaseFilter) {
+    const aggregated = {};
+    
+    // Initialize aggregated structure
+    window.LOCATIONS.forEach(location => {
+        const locationId = location.replace(/[^a-zA-Z0-9]/g, '_');
+        aggregated[locationId] = {};
+        AGE_INTERVALS.forEach(interval => {
+            aggregated[locationId][`M_${interval}`] = 0;
+            aggregated[locationId][`F_${interval}`] = 0;
+        });
+    });
+    
+    // Sum data from all matching monthly reports
+    Object.values(window.allMonthlyData).forEach(monthlyReport => {
+        const monthYear = monthlyReport.monthId;
+        const disease = monthlyReport.disease;
+        
+        if (fullMonthStrings.includes(monthYear) && 
+            (diseaseFilter === 'all' || disease === diseaseFilter)) {
+                
+            const reportData = monthlyReport.data;
+            
+            window.LOCATIONS.forEach(location => {
+                const locationId = location.replace(/[^a-zA-Z0-9]/g, '_');
+                const locData = reportData[locationId];
+                
+                if (locData) {
+                    AGE_INTERVALS.forEach(interval => {
+                        const keyM = `M_${interval}`;
+                        const keyF = `F_${interval}`;
+                        
+                        aggregated[locationId][keyM] += locData[keyM] || 0;
+                        aggregated[locationId][keyF] += locData[keyF] || 0;
+                    });
+                }
+            });
+        }
+    });
+    
+    return aggregated;
+}
+
+// --- ADMIN TOOLS, GRID RENDERING, and CALCULATION LOGIC (Retained from previous working version) ---
+
+window.renderConfigLists = function() {
+    const diseaseListUl = document.getElementById('diseaseList');
+    const locationListUl = document.getElementById('locationList');
+
+    // Render Diseases
+    diseaseListUl.innerHTML = window.DISEASES.map(d => `
+        <li class="flex justify-between items-center p-2 bg-white rounded shadow-sm border border-yellow-300 text-yellow-900">
+            <span class="truncate">${d}</span>
+            <button onclick="deleteDisease('${d}')" class="text-red-500 hover:text-red-700 ml-4 font-bold">
+                &times;
+            </button>
+        </li>
+    `).join('');
+
+    // Render Locations
+    locationListUl.innerHTML = window.LOCATIONS.map(l => `
+        <li class="flex justify-between items-center p-2 bg-white rounded shadow-sm border border-teal-300 text-teal-900">
+            <span class="truncate">${l}</span>
+            <button onclick="deleteLocation('${l}')" class="text-red-500 hover:text-red-700 ml-4 font-bold">
+                &times;
+            </button>
+        </li>
+    `).join('');
+};
+
+window.addDisease = function() {
+    const input = document.getElementById('newDiseaseInput');
+    let name = input.value.trim();
+    if (!name) return;
+    
+    const diseaseId = name.replace(/[^a-zA-Z0-9\s]/g, '').trim().replace(/\s+/g, '_');
+
+    if (window.DISEASES.includes(diseaseId)) {
+        document.getElementById('statusMessage').textContent = "Disease already exists or generates a duplicate ID.";
+        document.getElementById('statusMessage').className = "mb-4 p-3 rounded-lg text-sm bg-red-100 text-red-700";
+        document.getElementById('statusMessage').style.display = 'block';
+        return;
+    }
+    
+    window.DISEASES.push(diseaseId);
+    input.value = '';
+    window.saveConfig();
+};
+
+window.deleteDisease = function(id) {
+    window.DISEASES = window.DISEASES.filter(d => d !== id);
+    window.saveConfig();
+};
+
+window.addLocation = function() {
+    const input = document.getElementById('newLocationInput');
+    const name = input.value.trim();
+    if (!name) return;
+
+    if (!name.includes(':')) {
+          document.getElementById('statusMessage').textContent = "Location must be in the format 'EPSP: Commune/Secteur'.";
+          document.getElementById('statusMessage').className = "mb-4 p-3 rounded-lg text-sm bg-red-100 text-red-700";
+          document.getElementById('statusMessage').style.display = 'block';
+          return;
+    }
+    
+    if (window.LOCATIONS.includes(name)) {
+        document.getElementById('statusMessage').textContent = "Location already exists.";
+        document.getElementById('statusMessage').className = "mb-4 p-3 rounded-lg text-sm bg-red-100 text-red-700";
+        document.getElementById('statusMessage').style.display = 'block';
+        return;
+    }
+    
+    window.LOCATIONS.push(name);
+    input.value = '';
+    window.saveConfig();
+};
+
+window.deleteLocation = function(name) {
+    window.LOCATIONS = window.LOCATIONS.filter(l => l !== name);
+    window.saveConfig();
+};
+
+window.populateFilterDropdowns = function() {
+    const entrySelect = document.getElementById('entryDiseaseSelect');
+    const reportSelect = document.getElementById('reportDiseaseSelect');
+
+    const populate = (select, includeAll) => {
+        const currentVal = select.value;
+        select.innerHTML = '';
+        if (includeAll) {
+            const allOption = document.createElement('option');
+            allOption.value = 'all';
+            allOption.textContent = 'All Diseases';
+            select.appendChild(allOption);
+        }
+        window.DISEASES.forEach(d => {
+            const option = document.createElement('option');
+            option.value = d;
+            option.textContent = d.replace(/_/g, ' ');
+            select.appendChild(option);
+        });
+        if (currentVal && Array.from(select.options).some(opt => opt.value === currentVal)) {
+            select.value = currentVal;
+        } else if (!includeAll && window.DISEASES.length > 0) {
+              select.value = window.DISEASES[0];
+        } else if (includeAll) {
+              select.value = 'all';
+        }
+    };
+
+    populate(entrySelect, false);
+    populate(reportSelect, true);
+};
+
+window.saveConfig = async function() {
+    const payload = {
+        diseases: window.DISEASES,
+        locations: window.LOCATIONS,
+    };
+
+    try {
+        const result = await makeApiCall('/config', 'POST', payload);
+        if (result && result.success) {
+            document.getElementById('statusMessage').textContent = "Configuration saved successfully!";
+            document.getElementById('statusMessage').className = "mb-4 p-3 rounded-lg text-sm bg-green-100 text-green-700";
+            window.loadConfigAndRerender(); // Re-render everything with new config
+        } else {
+            throw new Error(result ? result.error : "Unknown config save error.");
+        }
+    } catch (e) {
+        console.error("Error saving config: ", e);
+        document.getElementById('statusMessage').textContent = `Error saving configuration: ${e.message}`;
+        document.getElementById('statusMessage').className = "mb-4 p-3 rounded-lg text-sm bg-red-100 text-red-700";
     }
 };
 
@@ -688,10 +1011,6 @@ window.calculateTotals = function(tableId) {
     if (grandTotalMEl) grandTotalMEl.textContent = grandTotalM;
     if (grandTotalFEl) grandTotalFEl.textContent = grandTotalF;
     if (grandTotalGEl) grandTotalGEl.textContent = grandTotalM + grandTotalF;
-    
-    if (tableId === 'reportGrid') {
-        document.getElementById('reportTotalCount').textContent = `Report Total: ${grandTotalM + grandTotalF} Cases`;
-    }
 };
 
 window.collectGridData = function() {
@@ -716,94 +1035,3 @@ window.collectGridData = function() {
     });
     return data;
 };
-
-window.loadAggregatedReport = async function() {
-    const reportType = document.getElementById('reportTypeSelect').value;
-    const periodValue = document.getElementById('reportPeriodSelect').value;
-    const diseaseFilter = document.getElementById('reportDiseaseSelect').value;
-    
-    if (window.LOCATIONS.length === 0) {
-          document.getElementById('reportGrid').innerHTML = `<tr><td colspan="${(AGE_INTERVALS.length * 2) + 3}" class="text-center p-8 text-gray-500">
-            Cannot generate report: No locations defined.
-          </td></tr>`;
-          document.getElementById('reportTotalCount').textContent = "";
-          return;
-    }
-    
-    const { fullMonthStrings, year } = getAggregationMonths(reportType, periodValue);
-    
-    if (fullMonthStrings.length === 0) {
-          document.getElementById('statusMessage').textContent = "Please select a valid period.";
-          document.getElementById('statusMessage').className = "mb-4 p-3 rounded-lg text-sm bg-yellow-100 text-yellow-700";
-          return;
-    }
-    
-    const aggregatedData = aggregateData(fullMonthStrings, year, diseaseFilter);
-    window.loadDataIntoGrid(aggregatedData, 'reportGrid');
-    
-    document.getElementById('statusMessage').textContent = `Report loaded for ${diseaseFilter.replace(/_/g, ' ')} for ${periodValue.replace(/_/g, ' - ')}.`;
-    document.getElementById('statusMessage').className = "mb-4 p-3 rounded-lg text-sm bg-blue-100 text-blue-700";
-};
-
-function getAggregationMonths(type, periodValue) {
-      const [yearStr, periodId] = periodValue.split('_');
-      const year = yearStr || periodValue.substring(0, 4); 
-      
-      let monthsToAggregate = [];
-      
-      if (type === 'monthly') {
-          monthsToAggregate = [periodValue.substring(5, 7)];
-      } else {
-          const periods = REPORT_PERIODS[type];
-          const periodsConfig = periods ? periods.find(p => p.id === periodId) : null;
-
-          if (periodsConfig) {
-              monthsToAggregate = periodsConfig.months;
-          }
-      }
-      
-      const fullMonthStrings = monthsToAggregate.map(m => `${year}-${m}`);
-
-      return { fullMonthStrings, year: year };
-}
-
-function aggregateData(fullMonthStrings, year, diseaseFilter) {
-    const aggregated = {};
-    
-    window.LOCATIONS.forEach(location => {
-        const locationId = location.replace(/[^a-zA-Z0-9]/g, '_');
-        aggregated[locationId] = {};
-        AGE_INTERVALS.forEach(interval => {
-            aggregated[locationId][`M_${interval}`] = 0;
-            aggregated[locationId][`F_${interval}`] = 0;
-        });
-    });
-    
-    Object.values(window.allMonthlyData).forEach(monthlyReport => {
-        const monthYear = monthlyReport.monthId;
-        const disease = monthlyReport.disease;
-        
-        if (fullMonthStrings.includes(monthYear) && 
-            (diseaseFilter === 'all' || disease === diseaseFilter)) {
-                
-            const reportData = monthlyReport.data;
-            
-            window.LOCATIONS.forEach(location => {
-                const locationId = location.replace(/[^a-zA-Z0-9]/g, '_');
-                const locData = reportData[locationId];
-                
-                if (locData) {
-                    AGE_INTERVALS.forEach(interval => {
-                        const keyM = `M_${interval}`;
-                        const keyF = `F_${interval}`;
-                        
-                        aggregated[locationId][keyM] += locData[keyM] || 0;
-                        aggregated[locationId][keyF] += locData[keyF] || 0;
-                    });
-                }
-            });
-        }
-    });
-    
-    return aggregated;
-}
