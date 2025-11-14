@@ -56,6 +56,12 @@ window.onload = async function() {
     const currentMonth = new Date().toISOString().substring(0, 7); // YYYY-MM
     document.getElementById('entryMonthSelect').value = currentMonth;
     
+    // FIX 1: Ensure reporting type has a default value on load for robustness
+    const reportTypeSelect = document.getElementById('reportTypeSelect');
+    if (reportTypeSelect && !reportTypeSelect.value) {
+        reportTypeSelect.value = 'monthly';
+    }
+
     // Start the app by loading the config
     await window.loadConfigAndRerender();
     
@@ -63,19 +69,15 @@ window.onload = async function() {
     document.getElementById('entryMonthSelect').addEventListener('change', () => window.listenForEntryDataChanges());
     document.getElementById('entryDiseaseSelect').addEventListener('change', () => window.listenForEntryDataChanges());
 
-    // === FIX: Add event listeners for Admin buttons to ensure functionality ===
-    // 1. Add Disease Button
+    // === Add event listeners for Admin buttons to ensure functionality ===
     const addDiseaseBtn = document.getElementById('addDiseaseButton');
     if (addDiseaseBtn) addDiseaseBtn.addEventListener('click', window.addDisease);
 
-    // 2. Add Location Button
     const addLocationBtn = document.getElementById('addLocationButton');
     if (addLocationBtn) addLocationBtn.addEventListener('click', window.addLocation);
 
-    // 3. Commit Config Button
     const saveConfigBtn = document.getElementById('saveConfigButton');
     if (saveConfigBtn) saveConfigBtn.addEventListener('click', window.saveConfig);
-    // =========================================================================
 };
 
 /**
@@ -437,6 +439,12 @@ window.updateReportFilters = function() {
     
     const periods = REPORT_PERIODS[type];
     
+    // FIX 2: Guard clause to prevent crashing if 'periods' array is undefined
+    if (!periods) {
+        console.error(`Error: Invalid report type selected: ${type}`);
+        return;
+    }
+
     if (type === 'monthly') {
           periods.forEach(p => {
               const option = document.createElement('option');
@@ -514,7 +522,7 @@ window.renderGridStructure = function(tableId, isInput = true) {
         html += `<td id="row_total_F_${locationId}_${tableId}" class="total-cell text-sm min-w-[50px]">0</td>`;
         html += `<td id="row_total_G_${locationId}_${tableId}" class="total-cell text-sm min-w-[100px] border-l-2 border-gray-400">0</td>`;
 
-        html += `</tr>`;
+        html += '</tr>';
     });
     html += '</tbody>';
 
@@ -722,9 +730,11 @@ function getAggregationMonths(type, periodValue) {
       if (type === 'monthly') {
           monthsToAggregate = [periodValue.substring(5, 7)];
       } else {
-          const periods = REPORT_PERIODS[type].find(p => p.id === periodId);
-          if (periods) {
-              monthsToAggregate = periods.months;
+          const periods = REPORT_PERIODS[type];
+          const periodsConfig = periods ? periods.find(p => p.id === periodId) : null;
+
+          if (periodsConfig) {
+              monthsToAggregate = periodsConfig.months;
           }
       }
       
