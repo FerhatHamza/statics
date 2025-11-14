@@ -1,7 +1,7 @@
 // --- Configuration and Global State ---
 
-// Use a relative path to target the worker deployed on the same domain
-const API_BASE_URL = '/api/v1'; 
+// FIX: Changed from a relative path to the absolute URL of the deployed Worker API
+const API_BASE_URL = 'https://mehidistatics-api.ferhathamza17.workers.dev/api/v1'; 
 
 // This simulates the user authentication ID provided by the environment
 const userId = typeof __app_id !== 'undefined' ? `user-${__app_id}` : 'guest-user-1234'; 
@@ -26,7 +26,7 @@ const REPORT_PERIODS = {
  * Generic helper to make API calls to the Worker
  */
 async function makeApiCall(endpoint, method = 'GET', data = null) {
-    // Note: The worker handles the full path including the /user/:userId segment
+    // Construct the full URL using the absolute worker domain
     const url = `${API_BASE_URL}/user/${userId}${endpoint}`;
     const options = {
         method: method,
@@ -41,7 +41,7 @@ async function makeApiCall(endpoint, method = 'GET', data = null) {
         return await response.json();
     } catch (error) {
         console.error("API Call Error:", error);
-        document.getElementById('statusMessage').textContent = `API Error: ${error.message}. Check Worker deployment.`;
+        document.getElementById('statusMessage').textContent = `API Error: ${error.message}. Check Worker deployment and URL: ${url}`;
         document.getElementById('statusMessage').className = "mb-4 p-3 rounded-lg text-sm bg-red-100 text-red-700";
         document.getElementById('statusMessage').style.display = 'block';
         return null;
