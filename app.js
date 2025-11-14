@@ -1,6 +1,5 @@
 // --- Configuration and Global State ---
 
-// FIX: Ensure this is the correct API endpoint
 const API_BASE_URL = 'https://mehidistatics-api.ferhathamza17.workers.dev/api/v1'; 
 const userId = typeof __app_id !== 'undefined' ? `user-${__app_id}` : 'guest-user-1234'; 
 
@@ -8,12 +7,17 @@ const userId = typeof __app_id !== 'undefined' ? `user-${__app_id}` : 'guest-use
 window.allMonthlyData = {}; 
 window.DISEASES = []; 
 window.LOCATIONS = []; 
+window.selectedFilters = {
+    disease: [],
+    location: [],
+    interval: []
+};
 
 const AGE_INTERVALS = [
     "0_1", "2_4", "5_9", "10_14", "15_19", "20_44", "45_64", "65_plus"
 ];
 
-// Configuration for Quarterly, Semi-Annual, and Annual report periods
+// Configuration for report periods
 const REPORT_PERIODS = {
     quarterly: [], semiannual: [], annual: [], monthly: [] 
 };
@@ -60,12 +64,9 @@ window.onload = async function() {
     document.getElementById('entryDiseaseSelect').addEventListener('change', () => window.listenForEntryDataChanges());
     document.getElementById('saveButton').addEventListener('click', window.saveEntry);
     
-    // Add event listeners for Reporting Filters (CRITICAL)
+    // Add event listeners for Reporting Filters 
     const reportTypeSelect = document.getElementById('reportTypeSelect');
     const reportPeriodSelect = document.getElementById('reportPeriodSelect');
-    const reportDiseaseSelect = document.getElementById('reportDiseaseSelect');
-    const reportLocationSelect = document.getElementById('reportLocationSelect'); // NEW
-    const reportIntervalSelect = document.getElementById('reportIntervalSelect'); // NEW
 
     // Changing Report Type updates periods and triggers new report load
     if (reportTypeSelect) reportTypeSelect.addEventListener('change', () => { 
@@ -73,11 +74,8 @@ window.onload = async function() {
         window.loadAggregatedReport();
     });
     
-    // Changing Period, Disease, Location, or Interval triggers report load
+    // Changing Period triggers report load
     if (reportPeriodSelect) reportPeriodSelect.addEventListener('change', window.loadAggregatedReport);
-    if (reportDiseaseSelect) reportDiseaseSelect.addEventListener('change', window.loadAggregatedReport);
-    if (reportLocationSelect) reportLocationSelect.addEventListener('change', window.loadAggregatedReport);
-    if (reportIntervalSelect) reportIntervalSelect.addEventListener('change', window.loadAggregatedReport);
 
     // === Admin event listeners ===
     const addDiseaseBtn = document.getElementById('addDiseaseButton');
@@ -104,10 +102,10 @@ window.loadConfigAndRerender = async function() {
 
     // Re-render all parts of the UI that depend on these lists
     window.renderConfigLists();
-    window.populateFilterDropdowns();
+    window.populateFilterDropdowns(true); // Populate all dropdowns
     window.renderEntryGrid();
     window.renderReportGrid();
-    window.setupReportingFilters(); // Initialize periods, locations, and intervals
+    window.setupReportingFilters(); // Initialize periods and new tag filters
     window.listenForEntryDataChanges(); // Initial data load for entry view
 };
 
@@ -132,9 +130,7 @@ window.switchView = async function(view) {
         await window.listenForEntryDataChanges();
     } else if (view === 'reporting') {
         await window.fetchAllMonthlyData();
-        // Update filters and run report
         window.updateReportFilters();
-        window.populateLocationAndIntervalFilters(); 
         window.loadAggregatedReport();
     } else if (view === 'admin') {
         window.renderConfigLists();
@@ -247,7 +243,7 @@ window.fetchAllMonthlyData = async function() {
 }
 
 /**
- * Defines the available report periods (Q1, S1, etc.) for aggregation.
+ * Defines the available report periods (Q1, S1, etc.) for aggregation and initializes tag filters.
  */
 window.setupReportingFilters = function() {
       const currentYear = new Date().getFullYear();
@@ -259,11 +255,7 @@ window.setupReportingFilters = function() {
           for (let m = 12; m >= 1; m--) {
               const monthStr = m.toString().padStart(2, '0');
               const monthId = `${y}-${monthStr}`;
-              monthPeriods.push({
-                  id: monthId,
-                  label: monthId,
-                  months: [monthStr]
-              });
+              monthPeriods.push({ id: monthId, label: monthId, months: [monthStr] });
           }
       }
       REPORT_PERIODS.monthly = monthPeriods;
@@ -282,37 +274,131 @@ window.setupReportingFilters = function() {
       ];
       
       window.updateReportFilters();
-      window.populateLocationAndIntervalFilters(); 
+      window.initializeReportFilters();
 }
 
 /**
- * Populates the new Location and Age Interval multi-selects.
+ * Initializes all report filter tags to 'select all' and renders the initial tags.
  */
-window.populateLocationAndIntervalFilters = function() {
-    const locSelect = document.getElementById('reportLocationSelect');
-    const intSelect = document.getElementById('reportIntervalSelect');
-    
-    // Populate Locations (Rows)
-    locSelect.innerHTML = '';
-    window.LOCATIONS.forEach(loc => {
-        const option = document.createElement('option');
-        // Use the sanitized ID for the value, but the full name for display
-        option.value = loc.replace(/[^a-zA-Z0-9]/g, '_'); 
-        option.textContent = loc;
-        option.selected = true; // Select all by default
-        locSelect.appendChild(option);
-    });
+window.initializeReportFilters = function() {
+    // 1. Initialize Disease Filter (All selected by default)
+    window.selectedFilters.disease = window.DISEASES.map(d => ({
+        value: d,
+        text: d.replace(/_/g, ' ')
+    }));
 
-    // Populate Age Intervals (Columns)
-    intSelect.innerHTML = '';
-    AGE_INTERVALS.forEach(interval => {
-        const option = document.createElement('option');
-        option.value = interval;
-        option.textContent = interval.replace(/_/g, '-').replace('plus', '+');
-        option.selected = true; // Select all by default
-        intSelect.appendChild(option);
-    });
-};
+    // 2. Initialize Location Filter (All selected by default)
+    window.selectedFilters.location = window.LOCATIONS.map(loc => ({
+        value: loc.replace(/[^a-zA-Z0-9]/g, '_'),
+        text: loc
+    }));
+
+    // 3. Initialize Interval Filter (All selected by default)
+    window.selectedFilters.interval = AGE_INTERVALS.map(int => ({
+        value: int,
+        text: int.replace(/_/g, '-').replace('plus', '+')
+    }));
+
+    window.renderFilterTags('disease');
+    window.renderFilterTags('location');
+    window.renderFilterTags('interval');
+    
+    // Set initial button text
+    document.getElementById('diseaseSelectAllBtn').textContent = "Deselect All";
+    document.getElementById('locationSelectAllBtn').textContent = "Deselect All";
+    document.getElementById('intervalSelectAllBtn').textContent = "Deselect All";
+}
+
+/**
+ * Adds a selected item from the dropdown to the active filters.
+ */
+window.addFilterTag = function(filterType) {
+    const select = document.getElementById(`${filterType}AddSelect`);
+    const value = select.value;
+    const text = select.options[select.selectedIndex].text;
+    
+    if (value && !window.selectedFilters[filterType].some(f => f.value === value)) {
+        window.selectedFilters[filterType].push({ value, text });
+        window.renderFilterTags(filterType);
+        window.loadAggregatedReport();
+    }
+}
+
+/**
+ * Removes a tag from the active filters.
+ */
+window.removeFilterTag = function(filterType, value) {
+    window.selectedFilters[filterType] = window.selectedFilters[filterType].filter(f => f.value !== value);
+    window.renderFilterTags(filterType);
+    window.loadAggregatedReport();
+}
+
+/**
+ * Renders the filter tags (pills) for a given filter type.
+ */
+window.renderFilterTags = function(filterType) {
+    const container = document.getElementById(`report${filterType.charAt(0).toUpperCase() + filterType.slice(1)}_tagsContainer`);
+    if (!container) return;
+    
+    container.innerHTML = window.selectedFilters[filterType].map(f => `
+        <span class="filter-tag" data-value="${f.value}">
+            ${f.text}
+            <button class="tag-remove-btn" onclick="window.removeFilterTag('${filterType}', '${f.value}')">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                    <path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd" />
+                </svg>
+            </button>
+        </span>
+    `).join('');
+
+    // Update the "Select All" button text
+    const button = document.getElementById(`${filterType}SelectAllBtn`);
+    let allCount = 0;
+    if (filterType === 'disease') allCount = window.DISEASES.length;
+    else if (filterType === 'location') allCount = window.LOCATIONS.length;
+    else if (filterType === 'interval') allCount = AGE_INTERVALS.length;
+
+    if (button) {
+        if (window.selectedFilters[filterType].length === allCount) {
+            button.textContent = "Deselect All";
+        } else {
+            button.textContent = "Select All";
+        }
+    }
+}
+
+/**
+ * Toggles selection of all available items for a filter type.
+ */
+window.toggleSelectAll = function(filterType) {
+    const button = document.getElementById(`${filterType}SelectAllBtn`);
+    let allItems = [];
+    
+    if (filterType === 'disease') {
+        allItems = window.DISEASES.map(d => ({ value: d, text: d.replace(/_/g, ' ') }));
+    } else if (filterType === 'location') {
+        allItems = window.LOCATIONS.map(loc => ({
+            value: loc.replace(/[^a-zA-Z0-9]/g, '_'),
+            text: loc
+        }));
+    } else if (filterType === 'interval') {
+        allItems = AGE_INTERVALS.map(int => ({
+            value: int,
+            text: int.replace(/_/g, '-').replace('plus', '+')
+        }));
+    }
+
+    if (window.selectedFilters[filterType].length === allItems.length) {
+        // Currently all selected -> deselect all
+        window.selectedFilters[filterType] = [];
+    } else {
+        // Currently not all selected -> select all
+        window.selectedFilters[filterType] = allItems;
+    }
+
+    window.renderFilterTags(filterType);
+    window.loadAggregatedReport();
+}
 
 /**
  * Updates the Period dropdown based on the selected Report Type.
@@ -376,51 +462,34 @@ window.loadAggregatedReport = async function() {
     const reportType = document.getElementById('reportTypeSelect').value;
     const periodValue = document.getElementById('reportPeriodSelect').value;
     
-    // Get selected filters (multi-selects)
-    const selectedDiseases = Array.from(document.getElementById('reportDiseaseSelect').selectedOptions).map(opt => opt.value);
-    const selectedLocations = Array.from(document.getElementById('reportLocationSelect').selectedOptions).map(opt => opt.value);
-    const selectedIntervals = Array.from(document.getElementById('reportIntervalSelect').selectedOptions).map(opt => opt.value);
-    
-    if (window.LOCATIONS.length === 0) {
-          document.getElementById('reportGrid').innerHTML = `<thead><tr><td colspan="${(AGE_INTERVALS.length * 2) + 3}" class="text-center p-8 text-gray-500">
-            Cannot generate report: No locations defined.
-          </td></tr></thead>`;
-          document.getElementById('reportTotalCount').textContent = "Report Total: 0 Cases";
-          d3.select('#reportCharts').html('<p class="text-center text-gray-500 py-8 font-semibold">No locations defined in Admin Tools.</p>');
-          return;
-    }
+    // Get selected filters from the global state
+    const selectedDiseases = window.selectedFilters.disease.map(f => f.value);
+    const selectedLocations = window.selectedFilters.location.map(f => f.value);
+    const selectedIntervals = window.selectedFilters.interval.map(f => f.value);
     
     // Check if essential filters are empty
     if (selectedDiseases.length === 0 || selectedLocations.length === 0 || selectedIntervals.length === 0) {
         document.getElementById('statusMessage').textContent = "Please select at least one Disease, Location, and Age Interval.";
         document.getElementById('statusMessage').className = "mb-4 p-3 rounded-lg text-sm bg-yellow-100 text-yellow-700";
-        document.getElementById('reportGrid').innerHTML = `<thead><tr><td colspan="${(AGE_INTERVALS.length * 2) + 3}" class="text-center p-8 text-gray-500">
-            Select filters above to generate a report.
-          </td></tr></thead>`;
         document.getElementById('reportTotalCount').textContent = "Report Total: 0 Cases";
-        d3.select('#reportCharts').html('<p class="text-center text-gray-500 py-8 font-semibold">Select filters to generate report.</p>');
+        document.getElementById('reportCharts').innerHTML = '<p class="text-center text-gray-500 py-8 font-semibold w-full">Select filters to generate report.</p>';
+        window.filterAndRenderGrid({}, selectedLocations, selectedIntervals, 'reportGrid'); 
         return;
     }
     
     const { fullMonthStrings, year } = getAggregationMonths(reportType, periodValue);
     
-    if (fullMonthStrings.length === 0) {
-          document.getElementById('statusMessage').textContent = "Please select a valid period.";
-          document.getElementById('statusMessage').className = "mb-4 p-3 rounded-lg text-sm bg-yellow-100 text-yellow-700";
-          d3.select('#reportCharts').html('<p class="text-center text-gray-500 py-8 font-semibold">Select a valid time period.</p>');
-          return;
-    }
-    
     // 1. Aggregate data based on Time Period and Diseases
+    // NOTE: This now aggregates all selected diseases into a single report structure
     const aggregatedData = aggregateData(fullMonthStrings, year, selectedDiseases);
 
     // 2. Filter and Render the Grid based on selected Locations and Intervals
     window.filterAndRenderGrid(aggregatedData, selectedLocations, selectedIntervals, 'reportGrid');
     
-    // 3. Render charts
-    window.renderCharts(aggregatedData, selectedLocations, selectedIntervals, periodValue);
+    // 3. Render charts (updated to use Grouped Bar)
+    window.renderCharts(aggregatedData, selectedLocations, selectedIntervals, selectedDiseases, periodValue);
 
-    document.getElementById('statusMessage').textContent = `Report loaded for ${selectedDiseases.join(', ').replace(/_/g, ' ')} for ${periodValue.replace(/_/g, ' - ')}.`;
+    document.getElementById('statusMessage').textContent = `Report loaded for ${periodValue.replace(/_/g, ' - ')}.`;
     document.getElementById('statusMessage').className = "mb-4 p-3 rounded-lg text-sm bg-blue-100 text-blue-700";
 };
 
@@ -503,7 +572,7 @@ function aggregateData(fullMonthStrings, year, selectedDiseases) {
 }
 
 /**
- * NEW FUNCTION: Filters and renders the report grid based on selected Locations and Intervals.
+ * Filters and renders the report grid based on selected Locations and Intervals.
  */
 window.filterAndRenderGrid = function(data, selectedLocations, selectedIntervals, tableId) {
     const table = document.getElementById(tableId);
@@ -511,7 +580,6 @@ window.filterAndRenderGrid = function(data, selectedLocations, selectedIntervals
 
     let html = '';
     
-    // 1. Determine which locations and intervals to display
     // Map full location names back from their IDs to preserve the correct display string
     const filteredLocations = window.LOCATIONS.filter(loc => selectedLocations.includes(loc.replace(/[^a-zA-Z0-9]/g, '_')));
     const filteredIntervals = AGE_INTERVALS.filter(int => selectedIntervals.includes(int));
@@ -519,7 +587,7 @@ window.filterAndRenderGrid = function(data, selectedLocations, selectedIntervals
     // Safety check
     if (filteredLocations.length === 0 || filteredIntervals.length === 0) {
         table.innerHTML = `<thead><tr><td colspan="${(AGE_INTERVALS.length * 2) + 3}" class="text-center p-8 text-gray-500">
-            No data to display. Adjust filters (Locations/Intervals).
+            No data structure to display. Adjust filter selections.
         </td></tr></thead>`;
         window.calculateTotals(tableId, [], []); // Clear totals
         return;
@@ -676,189 +744,89 @@ window.calculateTotals = function(tableId, locationsList = window.LOCATIONS, int
 };
 
 
-// --- Chart Rendering Logic (Must be updated to respect filtered data) ---
+// --- Revised Chart Rendering Logic (Grouped Bar Chart) ---
 
-window.renderCharts = function(aggregatedData, selectedLocations, selectedIntervals, periodValue) {
+window.renderCharts = function(aggregatedData, selectedLocations, selectedIntervals, selectedDiseases, periodValue) {
     const chartContainer = d3.select('#reportCharts');
     chartContainer.html(''); 
 
-    const locationTotals = [];
-    // Ensure chart intervals match the selected intervals
-    const ageIntervalTotals = selectedIntervals.map(int => ({ 
-        interval: int.replace(/_/g, '-').replace('plus', '+'), 
-        M: 0, 
-        F: 0 
-    }));
     let grandTotal = 0;
+    const diseaseNames = selectedDiseases.map(d => d.replace(/_/g, ' '));
+    // Get the full location names for clean display
+    const locationNames = window.LOCATIONS.filter(loc => selectedLocations.includes(loc.replace(/[^a-zA-Z0-9]/g, '_')));
 
-    // Filtered list of locations (used for row iteration)
-    const filteredLocations = window.LOCATIONS.filter(loc => selectedLocations.includes(loc.replace(/[^a-zA-Z0-9]/g, '_')));
-
-    // Only iterate over the locations and intervals selected by the user
-    filteredLocations.forEach(location => {
+    // 1. Data Preparation: Aggregate all selected intervals/sexes for each Location
+    const chartData = locationNames.map(location => {
         const locationId = location.replace(/[^a-zA-Z0-9]/g, '_');
-        let locTotal = 0;
+        let totalCases = 0;
         
-        selectedIntervals.forEach((interval) => {
-            const keyM = `M_${interval}`;
-            const keyF = `F_${interval}`;
-
-            // Fetch data from the fully aggregated data object
-            const mCount = aggregatedData[locationId]?.[keyM] || 0;
-            const fCount = aggregatedData[locationId]?.[keyF] || 0;
-            
-            locTotal += mCount + fCount;
-
-            // Only update age interval totals for the selected intervals
-            const chartIntervalIndex = ageIntervalTotals.findIndex(d => d.interval === interval.replace(/_/g, '-').replace('plus', '+'));
-            if (chartIntervalIndex !== -1) {
-                ageIntervalTotals[chartIntervalIndex].M += mCount;
-                ageIntervalTotals[chartIntervalIndex].F += fCount;
-            }
+        selectedIntervals.forEach(interval => {
+            totalCases += aggregatedData[locationId]?.[`M_${interval}`] || 0;
+            totalCases += aggregatedData[locationId]?.[`F_${interval}`] || 0;
         });
+
+        grandTotal += totalCases;
         
-        if (locTotal > 0) {
-            const locName = location.split(':').length > 1 ? location.split(':')[1].trim() : location;
-            locationTotals.push({ location: locName, total: locTotal });
-        }
-        grandTotal += locTotal;
-    });
+        // Use a clean name for the chart
+        const locName = location.split(':').length > 1 ? location.split(':')[1].trim() : location;
+        
+        return {
+            location: locName,
+            total: totalCases
+        };
+    }).filter(d => d.total > 0);
     
     // Update the total count display
     document.getElementById('reportTotalCount').textContent = `Report Total: ${grandTotal} Cases`;
 
     if (grandTotal === 0) {
-        chartContainer.html('<p class="text-center text-gray-500 py-8 font-semibold">No data available after applying all filters.</p>');
+        chartContainer.html('<p class="text-center text-gray-500 py-8 font-semibold w-full">No data available after applying all filters.</p>');
         return;
     }
     
-    const title = `Report for ${periodValue.replace(/_/g, ' - ')}`;
-
-    if (locationTotals.length > 0) {
-        renderPieChart(chartContainer, locationTotals, grandTotal, title);
-    }
-
-    if (ageIntervalTotals.some(d => d.M > 0 || d.F > 0)) {
-        renderStackedBarChart(chartContainer, ageIntervalTotals, title);
-    }
+    // 2. Render the Grouped Bar Chart
+    renderGroupedBarChart(chartContainer, chartData, diseaseNames, locationNames, periodValue);
 };
 
 /**
- * Renders the Pie/Fraction Chart (Total Cases by Location)
+ * Renders a Grouped Bar Chart (Total Cases by Location for Selected Diseases/Period)
  */
-function renderPieChart(container, data, total, title) {
-    const width = 400, height = 400, margin = 20;
-    const radius = Math.min(width, height) / 2 - margin;
-
-    const chartDiv = container.append('div')
-        .attr('class', 'p-4 bg-white rounded-xl shadow-lg m-4 w-full md:w-[450px]');
-    
-    chartDiv.append('h3').attr('class', 'text-lg font-bold text-center mb-1 text-gray-800').text('Distribution by Location');
-    chartDiv.append('p').attr('class', 'text-sm text-center text-gray-600 mb-4').text(title);
-
-
-    const svg = chartDiv.append('svg')
-        .attr('width', width)
-        .attr('height', height)
-        .append('g')
-        .attr('transform', `translate(${width / 2}, ${height / 2})`);
-
-    const color = d3.scaleOrdinal(d3.schemeCategory10);
-
-    const pie = d3.pie()
-        .value(d => d.total)
-        .sort(null);
-
-    const arc = d3.arc()
-        .innerRadius(radius / 2) // Donut chart for pictorial fraction
-        .outerRadius(radius);
-
-    const outerArc = d3.arc()
-        .innerRadius(radius * 0.9)
-        .outerRadius(radius * 0.9);
-
-    svg.selectAll('slices')
-        .data(pie(data))
-        .enter()
-        .append('path')
-        .attr('d', arc)
-        .attr('fill', d => color(d.data.location))
-        .attr('stroke', 'white')
-        .style('stroke-width', '2px')
-        .style('opacity', 0.8)
-        .append('title')
-        .text(d => `${d.data.location}: ${d.data.total} cases (${d3.format(".1%")(d.data.total / total)})`);
-
-    // Add labels outside the pie
-    svg.selectAll('labels')
-        .data(pie(data))
-        .enter()
-        .append('text')
-        .attr('transform', function(d) {
-            const pos = outerArc.centroid(d);
-            const midAngle = d.startAngle + (d.endAngle - d.startAngle) / 2;
-            pos[0] = radius * 1.05 * (midAngle < Math.PI ? 1 : -1);
-            return `translate(${pos})`;
-        })
-        .style('text-anchor', function(d) {
-            const midAngle = d.startAngle + (d.endAngle - d.startAngle) / 2;
-            return (midAngle < Math.PI ? 'start' : 'end');
-        })
-        .style('font-size', '10px')
-        .text(d => `${d.data.location} (${d3.format(".1%")(d.data.total / total)})`);
-    
-    // Add total label in the center
-      svg.append("text")
-        .attr("text-anchor", "middle")
-        .attr("dominant-baseline", "middle")
-        .style("font-size", "1.5rem")
-        .style("font-weight", "bold")
-        .attr("fill", "#1f2937")
-        .text(total);
-}
-
-/**
- * Renders the Stacked Bar Chart (Age and Sex Distribution)
- */
-function renderStackedBarChart(container, data, title) {
-    const margin = { top: 30, right: 30, bottom: 60, left: 60 };
-    const chartWidth = 600; 
-    const chartHeight = 400;
+function renderGroupedBarChart(container, data, diseaseNames, locationNames, periodValue) {
+    const margin = { top: 40, right: 30, bottom: 100, left: 60 };
+    const chartWidth = Math.max(700, locationNames.length * 80); // Adjust width based on number of locations
+    const chartHeight = 450;
     const width = chartWidth - margin.left - margin.right;
     const height = chartHeight - margin.top - margin.bottom;
 
-    const keys = ['M', 'F'];
-    
     const chartDiv = container.append('div')
-        .attr('class', 'p-4 bg-white rounded-xl shadow-lg m-4 w-full md:w-[650px]');
+        .attr('class', 'p-4 bg-white rounded-xl shadow-lg m-4')
+        .style('width', `${chartWidth}px`);
 
-    chartDiv.append('h3').attr('class', 'text-lg font-bold text-center mb-1 text-gray-800').text('Age and Sex Distribution (Layered Area concept)');
-    chartDiv.append('p').attr('class', 'text-sm text-center text-gray-600 mb-4').text(title);
+    chartDiv.append('h3').attr('class', 'text-lg font-bold text-center mb-1 text-gray-800').text(`Comparison of Cases by Location`);
+    chartDiv.append('p').attr('class', 'text-sm text-center text-gray-600 mb-4').html(`Diseases: **${diseaseNames.join(', ')}** during **${periodValue.replace(/_/g, ' - ')}**`);
 
     const svg = chartDiv.append('svg')
-        .attr('width', width + margin.left + margin.right)
-        .attr('height', height + margin.top + margin.bottom)
+        .attr('width', chartWidth)
+        .attr('height', chartHeight)
         .append('g')
         .attr('transform', `translate(${margin.left}, ${margin.top})`);
 
-    // Data processing for stacking
-    const stack = d3.stack().keys(keys).order(d3.stackOrderNone).offset(d3.stackOffsetNone);
-    const stackedData = stack(data);
-
-    // Scales
+    // X-axis: Location
     const x = d3.scaleBand()
-        .domain(data.map(d => d.interval))
+        .domain(data.map(d => d.location))
         .range([0, width])
         .padding(0.2);
 
-    const yMax = d3.max(stackedData[stackedData.length - 1], d => d[1]);
+    // Y-axis: Case Count
+    const yMax = d3.max(data, d => d.total);
     const y = d3.scaleLinear()
-        .domain([0, yMax])
+        .domain([0, yMax * 1.1])
         .range([height, 0]);
 
+    // Color: Single color since we're summing all sexes/intervals
     const color = d3.scaleOrdinal()
-        .domain(keys)
-        .range(['#3b82f6', '#f472b6']); // Blue for Male (M), Pink for Female (F)
+        .domain(['Total'])
+        .range(['#3b82f6']);
 
     // Axes
     svg.append('g')
@@ -868,10 +836,9 @@ function renderStackedBarChart(container, data, title) {
         .style("text-anchor", "end")
         .attr("dx", "-.8em")
         .attr("dy", ".15em")
-        .attr("transform", "rotate(-45)");
+        .attr("transform", "rotate(-45)"); 
 
-    svg.append('g')
-        .call(d3.axisLeft(y).ticks(5));
+    svg.append('g').call(d3.axisLeft(y).ticks(5));
 
     // Y-Axis Label
     svg.append("text")
@@ -884,46 +851,33 @@ function renderStackedBarChart(container, data, title) {
         .text("Total Cases");
 
     // Bars
-    svg.selectAll('.layer')
-        .data(stackedData)
-        .enter().append('g')
-        .attr('class', 'layer')
-        .attr('fill', d => color(d.key))
-        .selectAll('rect')
-        .data(d => d)
+    svg.selectAll('.bar')
+        .data(data)
         .enter().append('rect')
-        .attr('x', d => x(d.data.interval))
-        .attr('y', d => y(d[1]))
-        .attr('height', d => y(d[0]) - y(d[1]))
+        .attr('class', 'bar')
+        .attr('x', d => x(d.location))
+        .attr('y', d => y(d.total))
+        .attr('height', d => height - y(d.total))
         .attr('width', x.bandwidth())
-        .attr('rx', 4) // Rounded corners for aesthetics
+        .attr('fill', color('Total'))
+        .attr('rx', 4)
         .append('title')
-        .text(d => `${d.data.interval} (${d3.select(this.parentNode).datum().key === 'M' ? 'Male' : 'Female'}): ${d[1] - d[0]} cases`);
+        .text(d => `${d.location}: ${d.total} cases`);
 
-    // Legend
-    const legend = svg.append('g')
-        .attr('transform', `translate(${width - 100}, 0)`);
-
-    keys.forEach((key, i) => {
-        const legendRow = legend.append('g')
-            .attr('transform', `translate(0, ${i * 20})`);
-        
-        legendRow.append('rect')
-            .attr('width', 10)
-            .attr('height', 10)
-            .attr('fill', color(key))
-            .attr('rx', 2);
-
-        legendRow.append('text')
-            .attr('x', 15)
-            .attr('y', 10)
-            .style('font-size', '12px')
-            .text(key === 'M' ? 'Male' : 'Female');
-    });
+    // Add labels on top of bars
+    svg.selectAll(".bar-label")
+        .data(data)
+        .enter().append("text")
+        .attr("class", "bar-label")
+        .attr("x", d => x(d.location) + x.bandwidth() / 2)
+        .attr("y", d => y(d.total) - 5)
+        .attr("text-anchor", "middle")
+        .style("font-size", "10px")
+        .style("fill", "#1f2937")
+        .text(d => d.total);
 }
 
-
-// --- Admin Tools, Data Entry Grid Logic (Mostly kept from previous versions) ---
+// --- Admin Tools, Data Entry Grid Logic ---
 
 window.renderConfigLists = function() {
     const diseaseListUl = document.getElementById('diseaseList');
@@ -932,7 +886,7 @@ window.renderConfigLists = function() {
     // Render Diseases
     diseaseListUl.innerHTML = window.DISEASES.map(d => `
         <li class="flex justify-between items-center p-2 bg-white rounded shadow-sm border border-yellow-300 text-yellow-900">
-            <span class="truncate">${d}</span>
+            <span class="truncate">${d.replace(/_/g, ' ')}</span>
             <button onclick="deleteDisease('${d}')" class="text-red-500 hover:text-red-700 ml-4 font-bold">
                 &times;
             </button>
@@ -955,6 +909,7 @@ window.addDisease = function() {
     let name = input.value.trim();
     if (!name) return;
     
+    // Create an ID from the name
     const diseaseId = name.replace(/[^a-zA-Z0-9\s]/g, '').trim().replace(/\s+/g, '_');
 
     if (window.DISEASES.includes(diseaseId)) {
@@ -1004,38 +959,24 @@ window.deleteLocation = function(name) {
 };
 
 window.populateFilterDropdowns = function() {
+    // 1. Data Entry Disease Select
     const entrySelect = document.getElementById('entryDiseaseSelect');
-    const reportSelect = document.getElementById('reportDiseaseSelect');
+    let currentEntryVal = entrySelect.value;
+    entrySelect.innerHTML = window.DISEASES.map(d => `<option value="${d}" ${d === currentEntryVal ? 'selected' : ''}>${d.replace(/_/g, ' ')}</option>`).join('');
 
-    const populate = (select, includeAll) => {
-        const currentVal = Array.from(select.options).filter(opt => opt.selected).map(opt => opt.value);
-        select.innerHTML = '';
-        if (includeAll) {
-            const allOption = document.createElement('option');
-            allOption.value = 'all';
-            allOption.textContent = 'All Diseases';
-            allOption.selected = true;
-            select.appendChild(allOption);
-        }
-        window.DISEASES.forEach(d => {
-            const option = document.createElement('option');
-            option.value = d;
-            option.textContent = d.replace(/_/g, ' ');
-            if (currentVal.includes(d) || (!includeAll && currentVal.length === 0 && d === window.DISEASES[0])) {
-                option.selected = true; // Retain selection or select first for entry grid
-            }
-            select.appendChild(option);
-        });
+    // 2. Report Filter Dropdowns (for adding tags)
+    const diseaseAddSelect = document.getElementById('diseaseAddSelect');
+    const locationAddSelect = document.getElementById('locationAddSelect');
+    const intervalAddSelect = document.getElementById('intervalAddSelect');
 
-        // Ensure at least one option is selected in multi-select for reporting
-        if (includeAll && select.selectedOptions.length === 0 && select.options.length > 0) {
-            select.options[0].selected = true;
-        }
-    };
+    // Disease Add Select
+    diseaseAddSelect.innerHTML = window.DISEASES.map(d => `<option value="${d}">${d.replace(/_/g, ' ')}</option>`).join('');
+    
+    // Location Add Select
+    locationAddSelect.innerHTML = window.LOCATIONS.map(l => `<option value="${l.replace(/[^a-zA-Z0-9]/g, '_')}">${l}</option>`).join('');
 
-    populate(entrySelect, false);
-    populate(reportSelect, true);
-    window.populateLocationAndIntervalFilters();
+    // Interval Add Select
+    intervalAddSelect.innerHTML = AGE_INTERVALS.map(i => `<option value="${i}">${i.replace(/_/g, '-').replace('plus', '+')}</option>`).join('');
 };
 
 window.saveConfig = async function() {
