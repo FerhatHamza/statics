@@ -585,7 +585,7 @@ function renderBoxPlot(container, rawData, title) {
         .text(d => `Outlier Case Count: ${d.value}`);
 }
 
-// --- D3 CHARTING LOGIC ---
+// --- directly labelled chart---
 
 /**
  * Prepares data and calls the specific chart rendering functions.
@@ -773,6 +773,377 @@ function renderDirectLabelledChart(container, rawData, title) {
         .style("text-anchor", "start")
         .text(d => d3.format(".0f")(d.value)); // Display the median value
 
+}
+
+// --- MOCK GLOBAL VARIABLES (Assuming these exist in the actual environment) ---
+window.LOCATIONS = [
+    "Facility: Main Hospital", 
+    "Facility: South Clinic", 
+    "Facility: West Satellite"
+];
+window.AGE_INTERVALS = [
+    "0_10", 
+    "11_20", 
+    "21_30", 
+    "31_40", 
+    "41_50", 
+    "51_plus"
+];
+const GENDERS = ['M', 'F'];
+
+// --- D3 CHARTING LOGIC ---
+
+/**
+ * Prepares data and calls the specific chart rendering functions.
+ */
+window.renderCharts = function(aggregatedData, diseaseFilter, periodValue) {
+    // Example Mock Data if aggregatedData is empty for testing the new chart:
+    if (!aggregatedData || Object.keys(aggregatedData).length === 0) {
+        aggregatedData = {
+            'Facility__Main_Hospital': { 'M_0_10': 5, 'F_0_10': 3, 'M_31_40': 15, 'F_31_40': 10, 'M_51_plus': 2 },
+            'Facility__South_Clinic': { 'M_11_20': 8, 'F_11_20': 12, 'M_21_30': 5, 'F_21_30': 4, 'F_51_plus': 15 },
+            'Facility__West_Satellite': { 'M_0_10': 2, 'F_0_10': 1, 'M_41_50': 20, 'F_41_50': 18 }
+        };
+    }
+    
+    const chartContainer = d3.select('#reportCharts');
+    chartContainer.html(''); // Clear previous charts
+
+    // 1. Data for the Comparison Chart (raw counts for median calculation)
+    const comparisonChartDataRaw = [];
+    
+    // 2. Data for the Age/Sex Distribution by Location Chart
+    const locationAgeSexData = [];
+    let grandTotal = 0;
+
+    window.LOCATIONS.forEach(location => {
+        const locationId = location.replace(/[^a-zA-Z0-9]/g, '_');
+        const locName = location.split(':').length > 1 ? location.split(':')[1].trim() : location;
+        
+        AGE_INTERVALS.forEach((interval) => {
+            const mCount = aggregatedData[locationId]?.[`M_${interval}`] || 0;
+            const fCount = aggregatedData[locationId]?.[`F_${interval}`] || 0;
+            
+            // Prepare raw data for Median Chart
+            if (mCount > 0 || fCount > 0) {
+                comparisonChartDataRaw.push({ location: locName, value: mCount });
+                comparisonChartDataRaw.push({ location: locName, value: fCount });
+            }
+            
+            // Prepare data for Age/Sex by Location Chart
+            if (mCount > 0 || fCount > 0) {
+                 locationAgeSexData.push({
+                    location: locName,
+                    interval: interval.replace(/_/g, '-').replace('plus', '+'),
+                    M: mCount,
+                    F: fCount,
+                    Total: mCount + fCount
+                 });
+            }
+            
+            grandTotal += mCount + fCount;
+        });
+    });
+    
+    // Update the total count display
+    document.getElementById('reportTotalCount').textContent = `Report Total: ${grandTotal} Cases`;
+
+    if (grandTotal === 0) {
+        chartContainer.html('<p class="text-center text-gray-500 py-8 font-semibold">No data available for the selected period or disease.</p>');
+        return;
+    }
+    
+    const title = `${diseaseFilter === 'all' ? 'All Diseases' : diseaseFilter.replace(/_/g, ' ')} Report for ${periodValue.replace(/_/g, ' - ')}`;
+
+    // Use a flex container to hold the charts
+    const chartsRow = chartContainer.append('div').attr('class', 'flex flex-wrap justify-center items-start w-full');
+
+    // 1. Directly Labelled Comparison Chart (Median Case Count by Location)
+    if (comparisonChartDataRaw.length > 0) {
+        // We ensure only locations with values > 0 are passed
+        renderDirectLabelledChart(chartsRow, comparisonChartDataRaw.filter(d => d.value > 0), title);
+    }
+
+    // 2. Age and Sex Distribution by Location Chart (New Chart)
+    if (locationAgeSexData.length > 0) {
+        // We use the aggregated data for the detailed distribution chart
+        renderAgeSexByLocationChart(chartsRow, locationAgeSexData, title);
+    }
+};
+
+/**
+ * Renders a Horizontal Direct-Labelled Dot Plot (Median Case Counts by Location)
+ * (Function from previous step - kept for completeness)
+ */
+function renderDirectLabelledChart(container, rawData, title) {
+    const margin = { top: 30, right: 100, bottom: 40, left: 100 };
+    const chartWidth = 900; 
+    const chartHeight = 500;
+    const width = chartWidth - margin.left - margin.right;
+    const height = chartHeight - margin.top - margin.bottom;
+
+    const locationData = d3.group(rawData, d => d.location);
+    
+    const chartData = Array.from(locationData, ([location, values]) => {
+        const sortedValues = values.map(d => d.value).sort(d3.ascending);
+        const median = d3.quantile(sortedValues, 0.5); 
+        return { location: location, value: median };
+    });
+    
+    chartData.sort((a, b) => b.value - a.value);
+
+    const chartDiv = container.append('div')
+        .attr('class', 'p-4 bg-white rounded-xl shadow-lg m-4 w-full');
+
+    chartDiv.append('h3').attr('class', 'text-lg font-bold text-center mb-1 text-gray-800').text('Comparison of Median Case Counts by Location');
+    chartDiv.append('p').attr('class', 'text-sm text-center text-gray-600 mb-4').text(title);
+
+    const svg = chartDiv.append('svg')
+        .attr('viewBox', `0 0 ${chartWidth} ${chartHeight}`)
+        .attr('width', '100%')
+        .attr('height', '100%')
+        .append('g')
+        .attr('transform', `translate(${margin.left}, ${margin.top})`);
+    
+    const xMax = d3.max(chartData, d => d.value) * 1.1;
+    
+    const x = d3.scaleLinear()
+        .range([0, width])
+        .domain([0, xMax]);
+
+    const y = d3.scaleBand()
+        .range([0, height])
+        .domain(chartData.map(d => d.location))
+        .padding(0.5);
+
+    const color = d3.scaleOrdinal(d3.schemeCategory10);
+    
+    svg.append('g')
+        .attr('transform', `translate(0,${height})`)
+        .call(d3.axisBottom(x).ticks(5).tickFormat(d3.format("d")));
+
+    svg.append("text")
+        .attr("class", "x-axis-label")
+        .attr("y", height + margin.bottom - 5)
+        .attr("x", width / 2) 
+        .attr("fill", "gray")
+        .style("text-anchor", "middle")
+        .style("font-size", "12px")
+        .text("Median Case Count (Q2)");
+
+    svg.append('g')
+        .call(d3.axisLeft(y)); 
+
+    const plots = svg.selectAll(".directPlot")
+        .data(chartData)
+        .enter()
+        .append("g")
+        .attr("class", "directPlot")
+        .attr("transform", d => `translate(0, ${y(d.location)})`);
+
+    plots.append("line")
+        .attr("x1", x(0))
+        .attr("x2", d => x(d.value))
+        .attr("y1", y.bandwidth() / 2)
+        .attr("y2", y.bandwidth() / 2)
+        .attr("stroke", d => color(d.location))
+        .attr('stroke-width', 4)
+        .attr('stroke-linecap', 'round');
+
+    plots.append("circle")
+        .attr("cx", d => x(d.value))
+        .attr("cy", y.bandwidth() / 2)
+        .attr("r", 5)
+        .attr("fill", d => color(d.location))
+        .attr("stroke", "white")
+        .attr("stroke-width", 2);
+
+    plots.append("text")
+        .attr("x", d => x(d.value) + 10)
+        .attr("y", y.bandwidth() / 2 + 5)
+        .attr("fill", d => color(d.location))
+        .attr("font-weight", "bold")
+        .style("font-size", "14px")
+        .style("text-anchor", "start")
+        .text(d => d3.format(".0f")(d.value));
+}
+
+
+/**
+ * Renders the Age and Sex Distribution by Location using a Grouped Stacked Bar Chart.
+ */
+function renderAgeSexByLocationChart(container, rawData, title) {
+    // Increased bottom margin for Age Interval rotation
+    const margin = { top: 30, right: 30, bottom: 80, left: 60 };
+    const chartWidth = 900; 
+    const chartHeight = 500;
+    const width = chartWidth - margin.left - margin.right;
+    const height = chartHeight - margin.top - margin.bottom;
+
+    // 1. Prepare Stacked Data
+    const locations = Array.from(new Set(rawData.map(d => d.location)));
+    const ageIntervals = Array.from(new Set(rawData.map(d => d.interval)));
+
+    // Group data by location, then by age interval
+    const dataByLocation = d3.group(rawData, d => d.location);
+    
+    // Create a stack generator for M and F
+    const stack = d3.stack().keys(GENDERS);
+
+    // Prepare data for stacking for each location
+    const stackedDataByLocation = new Map();
+    dataByLocation.forEach((data, location) => {
+        // We must flatten the data for d3.stack()
+        const groupedForStack = data.map(d => ({
+            interval: d.interval,
+            M: d.M,
+            F: d.F,
+            Total: d.Total
+        }));
+        stackedDataByLocation.set(location, stack(groupedForStack));
+    });
+
+    // 2. Setup Scales
+    const maxTotalCount = d3.max(rawData, d => d.M + d.F);
+    
+    // X Scale (Case Count)
+    const x = d3.scaleLinear()
+        .range([0, width])
+        .domain([0, maxTotalCount * 1.1]);
+
+    // Y Scale (Age Intervals - Inner Band)
+    const yInner = d3.scaleBand()
+        .domain(ageIntervals)
+        .range([height, 0])
+        .padding(0.1);
+
+    // Z Scale (Color for Sex)
+    const z = d3.scaleOrdinal()
+        .domain(GENDERS)
+        .range(['#3b82f6', '#ec4899']); // Blue for Male, Pink for Female
+
+    // Create the container div
+    const chartDiv = container.append('div')
+        .attr('class', 'p-4 bg-white rounded-xl shadow-lg m-4 w-full');
+
+    chartDiv.append('h3').attr('class', 'text-lg font-bold text-center mb-1 text-gray-800').text('Age and Sex Distribution by Location');
+    chartDiv.append('p').attr('class', 'text-sm text-center text-gray-600 mb-4').text(title);
+
+    const svg = chartDiv.append('svg')
+        .attr('viewBox', `0 0 ${chartWidth} ${chartHeight}`)
+        .attr('width', '100%')
+        .attr('height', '100%')
+        .append('g')
+        .attr('transform', `translate(${margin.left}, ${margin.top})`);
+    
+    // 3. Axes
+    
+    // X-Axis (Count)
+    svg.append('g')
+        .attr('transform', `translate(0,${height})`)
+        .call(d3.axisBottom(x).ticks(5).tickFormat(d3.format("d")));
+
+    // X-Axis Label
+    svg.append("text")
+        .attr("y", height + margin.bottom - 5)
+        .attr("x", width / 2) 
+        .attr("fill", "gray")
+        .style("text-anchor", "middle")
+        .style("font-size", "12px")
+        .text("Case Count");
+
+    // Y-Axis (Age Intervals)
+    svg.append('g')
+        .call(d3.axisLeft(yInner))
+        .selectAll("text")
+        .style("font-size", "12px"); 
+        
+    // Y-Axis Label
+    svg.append("text")
+        .attr("transform", "rotate(-90)")
+        .attr("y", 0 - margin.left + 5)
+        .attr("x", 0 - (height / 2))
+        .attr("dy", "1em")
+        .style("text-anchor", "middle")
+        .style("font-size", "12px")
+        .text("Age Intervals");
+
+    // 4. Draw Facets (Small Multiples)
+    
+    // Split the chart width among the locations
+    const locationFacetWidth = width / locations.length;
+
+    const locationGroup = svg.selectAll(".location-facet")
+        .data(locations)
+        .enter()
+        .append("g")
+        .attr("class", "location-facet")
+        .attr("transform", (d, i) => `translate(${i * locationFacetWidth}, 0)`);
+        
+    // Scale X inside each facet (since total case count differs by age interval, this keeps the alignment consistent)
+    const xFacet = d3.scaleLinear()
+        .domain([0, maxTotalCount * 1.1]) // Global max for consistent bar scaling
+        .range([0, locationFacetWidth - 10]); // Subtract padding
+
+    // Add Separator Lines
+    locationGroup.append("line")
+        .attr("x1", 0)
+        .attr("x2", 0)
+        .attr("y1", 0)
+        .attr("y2", height)
+        .attr("stroke", "#e5e7eb")
+        .attr("stroke-dasharray", "2");
+
+    // Add Location Title
+    locationGroup.append("text")
+        .attr("x", locationFacetWidth / 2)
+        .attr("y", -5)
+        .attr("text-anchor", "middle")
+        .attr("font-weight", "bold")
+        .attr("fill", "#1f2937")
+        .text(d => d);
+
+    // Draw the stacked bars within each location facet
+    locationGroup.each(function(location) {
+        const stackedBars = stackedDataByLocation.get(location);
+        
+        d3.select(this).selectAll(".age-group")
+            .data(stackedBars)
+            .enter()
+            .append("g")
+            .attr("fill", d => z(d.key))
+            .attr("class", "age-group")
+            .selectAll("rect")
+            .data(d => d)
+            .enter()
+            .append("rect")
+            .attr("y", d => yInner(d.data.interval))
+            .attr("x", d => xFacet(d[0])) // Start position
+            .attr("height", yInner.bandwidth())
+            .attr("width", d => xFacet(d[1]) - xFacet(d[0])); // End position - Start position
+    });
+    
+    // 5. Add Legend for Gender
+    const legend = svg.append("g")
+        .attr("transform", `translate(${width - 120}, ${height + 40})`); // Position far right below chart
+
+    GENDERS.forEach((gender, i) => {
+        const legendItem = legend.append("g")
+            .attr("transform", `translate(${i * 60}, 0)`);
+
+        legendItem.append("rect")
+            .attr("width", 12)
+            .attr("height", 12)
+            .attr("fill", z(gender))
+            .attr("rx", 2);
+
+        legendItem.append("text")
+            .attr("x", 18)
+            .attr("y", 10)
+            .attr("fill", "gray")
+            .style("font-size", "12px")
+            .text(gender === 'M' ? 'Male' : 'Female');
+    });
 }
 
 
