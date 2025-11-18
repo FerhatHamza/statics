@@ -373,7 +373,7 @@ window.loadAggregatedReport = async function() {
 };
 
 // --- D3 CHARTING LOGIC ---
-
+/**
 /**
  * Prepares data and calls the specific chart rendering functions.
  */
@@ -584,6 +584,197 @@ function renderBoxPlot(container, rawData, title) {
         .append('title')
         .text(d => `Outlier Case Count: ${d.value}`);
 }
+
+// --- D3 CHARTING LOGIC ---
+
+/**
+ * Prepares data and calls the specific chart rendering functions.
+ */
+window.renderCharts = function(aggregatedData, diseaseFilter, periodValue) {
+    const chartContainer = d3.select('#reportCharts');
+    chartContainer.html(''); // Clear previous charts
+
+    // 1. Data for the Comparison Chart (Distribution of Case Counts per Location across Age/Sex groups)
+    const comparisonChartDataRaw = [];
+    // 2. Data for the Stacked Bar Chart (Age & Sex)
+    const ageIntervalTotals = AGE_INTERVALS.map(int => ({ 
+        interval: int.replace(/_/g, '-').replace('plus', '+'), 
+        M: 0, 
+        F: 0 
+    }));
+    let grandTotal = 0;
+
+    window.LOCATIONS.forEach(location => {
+        const locationId = location.replace(/[^a-zA-Z0-9]/g, '_');
+        
+        AGE_INTERVALS.forEach((interval, index) => {
+            const mCount = aggregatedData[locationId]?.[`M_${interval}`] || 0;
+            const fCount = aggregatedData[locationId]?.[`F_${interval}`] || 0;
+            
+            // Prepare raw data for Comparison Chart (raw counts for each category per location)
+            if (mCount > 0 || fCount > 0) {
+                const locName = location.split(':').length > 1 ? location.split(':')[1].trim() : location;
+                
+                // Add the Male count for this age interval as a data point
+                comparisonChartDataRaw.push({ 
+                    location: locName, 
+                    value: mCount 
+                });
+                // Add the Female count for this age interval as a data point
+                comparisonChartDataRaw.push({ 
+                    location: locName, 
+                    value: fCount 
+                });
+            }
+            
+            // Update totals for Stacked Bar Chart
+            ageIntervalTotals[index].M += mCount;
+            ageIntervalTotals[index].F += fCount;
+            grandTotal += mCount + fCount;
+        });
+    });
+    
+    // Update the total count display
+    document.getElementById('reportTotalCount').textContent = `Report Total: ${grandTotal} Cases`;
+
+    if (grandTotal === 0) {
+        chartContainer.html('<p class="text-center text-gray-500 py-8 font-semibold">No data available for the selected period or disease.</p>');
+        return;
+    }
+    
+    const title = `${diseaseFilter === 'all' ? 'All Diseases' : diseaseFilter.replace(/_/g, ' ')} Report for ${periodValue.replace(/_/g, ' - ')}`;
+
+    // Use a flex container to hold the charts
+    const chartsRow = chartContainer.append('div').attr('class', 'flex flex-wrap justify-center items-start w-full');
+
+    // 1. Directly Labelled Comparison Chart (Median Case Count by Location)
+    if (comparisonChartDataRaw.length > 0) {
+        renderDirectLabelledChart(chartsRow, comparisonChartDataRaw.filter(d => d.value > 0), title);
+    }
+
+    // 2. Layered Area Chart (Stacked Bar Chart for categorical data)
+    if (ageIntervalTotals.some(d => d.M > 0 || d.F > 0)) {
+        renderStackedBarChart(chartsRow, ageIntervalTotals, title);
+    }
+};
+
+/**
+ * Renders a Horizontal Direct-Labelled Dot Plot (Median Case Counts by Location)
+ */
+function renderDirectLabelledChart(container, rawData, title) {
+    // Increased right margin to ensure space for the direct value labels
+    const margin = { top: 30, right: 100, bottom: 40, left: 100 };
+    const chartWidth = 900; 
+    const chartHeight = 500;
+    const width = chartWidth - margin.left - margin.right;
+    const height = chartHeight - margin.top - margin.bottom;
+
+    // 1. Group raw data by location and calculate the Median
+    const locationData = d3.group(rawData, d => d.location);
+    
+    const chartData = Array.from(locationData, ([location, values]) => {
+        const sortedValues = values.map(d => d.value).sort(d3.ascending);
+        // Use the Median (Q2) as the primary comparison value
+        const median = d3.quantile(sortedValues, 0.5); 
+
+        return {
+            location: location,
+            value: median,
+        };
+    });
+    
+    // Sort the data by Median value, descending
+    chartData.sort((a, b) => b.value - a.value);
+
+    // Create the container div
+    const chartDiv = container.append('div')
+        .attr('class', 'p-4 bg-white rounded-xl shadow-lg m-4 w-full');
+
+    chartDiv.append('h3').attr('class', 'text-lg font-bold text-center mb-1 text-gray-800').text('Comparison of Median Case Counts by Location');
+    chartDiv.append('p').attr('class', 'text-sm text-center text-gray-600 mb-4').text(title);
+
+    const svg = chartDiv.append('svg')
+        .attr('viewBox', `0 0 ${chartWidth} ${chartHeight}`)
+        .attr('width', '100%')
+        .attr('height', '100%')
+        .append('g')
+        .attr('transform', `translate(${margin.left}, ${margin.top})`);
+    
+    // 2. Scales (Horizontal Bar/Dot Plot)
+    const xMax = d3.max(chartData, d => d.value) * 1.1;
+    
+    // X Scale (Value - Median Count)
+    const x = d3.scaleLinear()
+        .range([0, width])
+        .domain([0, xMax]);
+
+    // Y Scale (Categories - Locations)
+    const y = d3.scaleBand()
+        .range([0, height])
+        .domain(chartData.map(d => d.location))
+        .padding(0.5);
+
+    const color = d3.scaleOrdinal(d3.schemeCategory10);
+    
+    // 3. Axes
+    
+    // X-Axis (Value)
+    svg.append('g')
+        .attr('transform', `translate(0,${height})`)
+        .call(d3.axisBottom(x).ticks(5).tickFormat(d3.format("d")));
+
+    svg.append("text")
+        .attr("class", "x-axis-label")
+        .attr("y", height + margin.bottom - 5)
+        .attr("x", width / 2) 
+        .attr("fill", "gray")
+        .style("text-anchor", "middle")
+        .style("font-size", "12px")
+        .text("Median Case Count (Q2)");
+
+    // Y-Axis (Location Labels)
+    svg.append('g')
+        .call(d3.axisLeft(y)); 
+
+    // 4. Draw Lines/Dots and Labels
+    const plots = svg.selectAll(".directPlot")
+        .data(chartData)
+        .enter()
+        .append("g")
+        .attr("class", "directPlot")
+        .attr("transform", d => `translate(0, ${y(d.location)})`); // Move to the center of the bar band
+
+    // Draw the horizontal line from 0 to the value
+    plots.append("line")
+        .attr("x1", x(0))
+        .attr("x2", d => x(d.value))
+        .attr("y1", y.bandwidth() / 2)
+        .attr("y2", y.bandwidth() / 2)
+        .attr("stroke", d => color(d.location))
+        .attr('stroke-width', 4)
+        .attr('stroke-linecap', 'round');
+
+    // Draw the dot at the end (the primary comparison point)
+    plots.append("circle")
+        .attr("cx", d => x(d.value))
+        .attr("cy", y.bandwidth() / 2)
+        .attr("r", 5)
+        .attr("fill", d => color(d.location))
+        .attr("stroke", "white")
+        .attr("stroke-width", 2);
+
+    // Add the Direct Label (the core requirement)
+    plots.append("text")
+        .attr("x", d => x(d.value) + 10) // Offset label 10px to the right of the dot
+        .attr("y", y.bandwidth() / 2 + 5) // Vertically center the text
+        .attr("fill", d => color(d.location))
+        .attr("font-weight", "bold")
+        .style("font-size", "14px")
+        .style("text-anchor", "start")
+        .text(d => d3.format(".0f")(d.value)); // Display the median value
+
+}
+
 
 
 /**
