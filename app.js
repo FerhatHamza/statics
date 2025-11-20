@@ -551,7 +551,7 @@ function renderDirectLabelledChart(container, rawData, title) {
     const chartDiv = container.append('div')
         .attr('class', 'p-4 bg-white rounded-xl shadow-lg m-4 w-full');
 
-    chartDiv.append('h3').attr('class', 'text-lg font-bold text-center mb-1 text-gray-800').text('Comparison of Median Case Counts by Location');
+    chartDiv.append('h3').attr('class', 'text-lg font-bold text-center mb-1 text-gray-800').text('Repartition of Median Case Counts by Location');
     chartDiv.append('p').attr('class', 'text-sm text-center text-gray-600 mb-4').text(title);
 
     const svg = chartDiv.append('svg')
