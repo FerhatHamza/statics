@@ -730,6 +730,12 @@ window.renderCharts = function(aggregatedData, diseaseFilter, periodValue) {
         // We use the aggregated data for the detailed distribution chart
         renderAgeSexByLocationChart(chartsRow, locationAgeSexData, title);
     }
+     // 3. Age by Sex Distribution Chart (New Chart)
+    if (locationAgeSexData.length > 0) {
+        // We use the aggregated data for the detailed distribution chart
+        renderStackedBarChart(chartsRow, locationAgeSexData, title);
+    }
+    
 };
 
 /**
