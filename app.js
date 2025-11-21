@@ -249,7 +249,7 @@ window.fetchAllMonthlyData = async function() {
  */
 window.setupReportingFilters = function() {
       const currentYear = new Date().getFullYear();
-      const startYear = 2024; 
+      const startYear = 2025; 
       
       const monthPeriods = [];
       for (let y = currentYear; y >= startYear; y--) {
@@ -321,7 +321,7 @@ window.updateReportFilters = function() {
 
     } else {
           // Quarterly, Semi-Annual, Annual periods are prefixed by year
-          for (let y = currentYear; y >= 2024; y--) {
+          for (let y = currentYear; y >= 2025; y--) {
               periods.forEach(p => {
                   const option = document.createElement('option');
                   option.value = `${y}_${p.id}`;
@@ -435,7 +435,7 @@ window.updateExportPeriodOptions = function() {
             window.createCheckbox(container, p.id, p.label);
         });
     } else {
-        for (let y = currentYear; y >= 2024; y--) {
+        for (let y = currentYear; y >= 2025; y--) {
             periods.forEach(p => {
                 window.createCheckbox(container, `${y}_${p.id}`, `${y} - ${p.label}`);
             });
