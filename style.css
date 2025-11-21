@@ -95,3 +95,68 @@ body {
     color: #6b7280;
 }
 
+
+
+/* --- Print Styles --- */
+
+/* Screen styles for the report card */
+.report-card {
+    background-color: white;
+    border: 1px solid #e5e7eb;
+    border-radius: 0.75rem;
+    padding: 2rem;
+    margin-bottom: 2rem;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+}
+
+@media print {
+    /* Hide everything that isn't the print area */
+    body * {
+        visibility: hidden;
+    }
+    #printArea, #printArea * {
+        visibility: visible;
+    }
+    
+    /* Position the print area at the top left */
+    #printArea {
+        position: absolute;
+        left: 0;
+        top: 0;
+        width: 100%;
+        margin: 0;
+        padding: 0;
+    }
+
+    /* Ensure background colors (headers, totals) show up in PDF */
+    * {
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
+    }
+
+    /* Page Break Logic */
+    .report-card {
+        break-inside: avoid; /* Try not to split a table in half */
+        page-break-after: always; /* Force new page after each report card */
+        border: none; /* Remove border for cleaner print */
+        box-shadow: none;
+        margin-bottom: 0;
+        padding: 0;
+        padding-top: 20px;
+    }
+    
+    /* Hide standard UI elements */
+    .no-print, nav, header, button, .print\:hidden {
+        display: none !important;
+    }
+    
+    /* Reset table layout for paper width */
+    .grid-container {
+        max-height: none !important;
+        overflow: visible !important;
+        max-width: 100% !important;
+    }
+    .sticky-col {
+        position: static !important; /* Remove sticky behavior for print */
+    }
+}
