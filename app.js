@@ -372,6 +372,247 @@ window.loadAggregatedReport = async function() {
     document.getElementById('statusMessage').className = "mb-4 p-3 rounded-lg text-sm bg-blue-100 text-blue-700";
 };
 
+
+
+
+
+// --- EXPORT & PRINT LOGIC ---
+
+/**
+ * Initializes the Export Tab options
+ */
+window.initExportView = function() {
+    window.updateExportPeriodOptions();
+    
+    // Populate Disease Checkboxes
+    const diseaseContainer = document.getElementById('exportDiseaseContainer');
+    diseaseContainer.innerHTML = '';
+    
+    // "All Diseases" option
+    window.createCheckbox(diseaseContainer, 'all', 'All Diseases (Aggregated)');
+
+    window.DISEASES.forEach(d => {
+        window.createCheckbox(diseaseContainer, d, d.replace(/_/g, ' '));
+    });
+};
+
+/**
+ * Helper to create a checkbox
+ */
+window.createCheckbox = function(container, value, label) {
+    const div = document.createElement('div');
+    div.className = 'flex items-center';
+    
+    const input = document.createElement('input');
+    input.type = 'checkbox';
+    input.value = value;
+    input.className = 'h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded';
+    
+    const span = document.createElement('span');
+    span.className = 'ml-2 text-sm text-gray-700';
+    span.textContent = label;
+    
+    div.appendChild(input);
+    div.appendChild(span);
+    div.onclick = (e) => { if(e.target !== input) input.click(); }; // Click label to toggle
+    
+    container.appendChild(div);
+};
+
+/**
+ * Updates the Period checkboxes based on the selected Report Type (Monthly, Quarterly, etc.)
+ */
+window.updateExportPeriodOptions = function() {
+    const type = document.getElementById('exportTypeSelect').value;
+    const container = document.getElementById('exportPeriodContainer');
+    container.innerHTML = '';
+
+    const currentYear = new Date().getFullYear();
+    const periods = REPORT_PERIODS[type]; // Uses the global configuration from Part 1/2
+
+    if (type === 'monthly') {
+        periods.forEach(p => {
+            window.createCheckbox(container, p.id, p.label);
+        });
+    } else {
+        for (let y = currentYear; y >= 2024; y--) {
+            periods.forEach(p => {
+                window.createCheckbox(container, `${y}_${p.id}`, `${y} - ${p.label}`);
+            });
+        }
+    }
+};
+
+/**
+ * Helpers for Select All / Deselect All
+ */
+window.toggleCheckboxes = function(containerId, checked) {
+    const inputs = document.querySelectorAll(`#${containerId} input[type="checkbox"]`);
+    inputs.forEach(input => input.checked = checked);
+};
+
+/**
+ * THE CORE LOGIC: Generates the Batch Report
+ */
+window.generateBatchReport = function() {
+    const printArea = document.getElementById('printArea');
+    printArea.innerHTML = ''; // Clear previous
+
+    // 1. Get Selections
+    const type = document.getElementById('exportTypeSelect').value;
+    
+    // Get checked periods
+    const periodInputs = document.querySelectorAll('#exportPeriodContainer input[type="checkbox"]:checked');
+    const selectedPeriods = Array.from(periodInputs).map(i => ({ value: i.value, label: i.nextSibling.textContent }));
+
+    // Get checked diseases
+    const diseaseInputs = document.querySelectorAll('#exportDiseaseContainer input[type="checkbox"]:checked');
+    const selectedDiseases = Array.from(diseaseInputs).map(i => ({ value: i.value, label: i.nextSibling.textContent }));
+
+    if (selectedPeriods.length === 0 || selectedDiseases.length === 0) {
+        printArea.innerHTML = '<p class="text-red-500 text-center font-bold">Please select at least one Time Period and one Disease.</p>';
+        return;
+    }
+
+    // 2. Loop through combinations
+    let count = 0;
+    
+    selectedPeriods.forEach(period => {
+        selectedDiseases.forEach(disease => {
+            count++;
+            // Create a unique container for this specific report
+            const reportCard = document.createElement('div');
+            reportCard.className = 'report-card';
+            
+            // A. Header
+            const header = document.createElement('div');
+            header.className = 'border-b border-gray-300 pb-4 mb-4 text-center';
+            header.innerHTML = `
+                <h2 class="text-2xl font-extrabold text-gray-900 uppercase tracking-wide">${disease.label}</h2>
+                <p class="text-lg text-gray-600 font-semibold">${period.label}</p>
+                <p class="text-xs text-gray-400 mt-1">Generated: ${new Date().toLocaleDateString()}</p>
+            `;
+            reportCard.appendChild(header);
+
+            // B. Data Aggregation
+            // reusing your existing logic
+            const { fullMonthStrings, year } = getAggregationMonths(type, period.value);
+            // If "All Diseases" is selected (value='all'), aggregateData handles it.
+            // If specific disease, aggregateData handles it.
+            const aggregatedData = aggregateData(fullMonthStrings, year, disease.value);
+
+            // C. Render Grid
+            const gridContainer = document.createElement('div');
+            gridContainer.className = 'grid-container mb-8';
+            const tableId = `print_table_${count}`;
+            const table = document.createElement('table');
+            table.id = tableId;
+            table.className = 'table-fixed min-w-full';
+            gridContainer.appendChild(table);
+            reportCard.appendChild(gridContainer);
+
+            // D. Render Charts Container
+            const chartContainer = document.createElement('div');
+            chartContainer.id = `print_chart_${count}`;
+            chartContainer.className = 'flex flex-wrap justify-center gap-4 print:block print:w-full'; 
+            reportCard.appendChild(chartContainer);
+
+            // Append card to DOM
+            printArea.appendChild(reportCard);
+
+            // E. Populate Data (After appending to DOM so D3 can find elements)
+            window.renderGridStructure(tableId, false); 
+            window.loadDataIntoGrid(aggregatedData, tableId);
+
+            // F. Render Charts specific to this card
+            // We use d3.select on the specific container we just made
+            const d3Container = d3.select(`#print_chart_${count}`);
+            
+            // Render Stacked Bar
+            renderStackedBarChart(d3Container, prepareStackedData(aggregatedData), `${disease.label} - ${period.label}`);
+            
+            // Render Median Chart (if data exists)
+            const medianData = prepareMedianData(aggregatedData);
+            if(medianData.length > 0) {
+                renderDirectLabelledChart(d3Container, medianData, `${disease.label} - ${period.label}`);
+            }
+        });
+    });
+};
+
+// --- Helper functions for Charts (extracting data prep from the old renderCharts) ---
+
+function prepareStackedData(aggregatedData) {
+    return AGE_INTERVALS.map(int => {
+        let mTotal = 0;
+        let fTotal = 0;
+        window.LOCATIONS.forEach(loc => {
+            const locId = loc.replace(/[^a-zA-Z0-9]/g, '_');
+            mTotal += aggregatedData[locId]?.[`M_${int}`] || 0;
+            fTotal += aggregatedData[locId]?.[`F_${int}`] || 0;
+        });
+        return { 
+            interval: int.replace(/_/g, '-').replace('plus', '+'), 
+            M: mTotal, 
+            F: fTotal 
+        };
+    });
+}
+
+function prepareMedianData(aggregatedData) {
+    const rawData = [];
+    window.LOCATIONS.forEach(location => {
+        const locationId = location.replace(/[^a-zA-Z0-9]/g, '_');
+        const locName = location.split(':').length > 1 ? location.split(':')[1].trim() : location;
+        
+        AGE_INTERVALS.forEach(interval => {
+             const mCount = aggregatedData[locationId]?.[`M_${interval}`] || 0;
+             const fCount = aggregatedData[locationId]?.[`F_${interval}`] || 0;
+             if (mCount > 0) rawData.push({ location: locName, value: mCount });
+             if (fCount > 0) rawData.push({ location: locName, value: fCount });
+        });
+    });
+    return rawData;
+}
+
+// --- Update switchView to initialize the export tab ---
+const originalSwitchView = window.switchView;
+window.switchView = async function(view) {
+    // Call original logic
+    if(view === 'entry' || view === 'reporting' || view === 'admin') {
+         // Hide export view manually since original didn't know about it
+         document.getElementById('exportView').classList.add('hidden');
+         document.getElementById('printTab').classList.remove('tab-active');
+         document.getElementById('printTab').classList.add('tab-inactive');
+    }
+    
+    // Handle new Export View
+    if (view === 'export') {
+         // Hide others
+         ['entry', 'reporting', 'admin'].forEach(v => {
+            document.getElementById(`${v}View`).classList.add('hidden');
+            document.getElementById(`${v}Tab`).classList.remove('tab-active');
+            document.getElementById(`${v}Tab`).classList.add('tab-inactive');
+         });
+         
+         document.getElementById('exportView').classList.remove('hidden');
+         document.getElementById('printTab').classList.add('tab-active');
+         document.getElementById('printTab').classList.remove('tab-inactive');
+         
+         await window.fetchAllMonthlyData(); // Ensure we have data
+         window.initExportView(); // Initialize checkboxes
+         return;
+    }
+    
+    // Call original function for standard tabs
+    await originalSwitchView(view);
+};
+
+
+
+
+
+
 // --- D3 CHARTING LOGIC ---
 /**
 /**
