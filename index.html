@@ -129,16 +129,55 @@
                 </button>
             </div>
         </section>
-              <!-- NEW PRINT & EXPORT VIEW -->
+            <!-- NEW PRINT & EXPORT VIEW WITH FILTERS -->
         <section id="exportView" class="view hidden pt-4">
-            <h2 class="text-2xl font-bold text-gray-800 mb-6">Print & Export Utility</h2>
+            <h2 class="text-2xl font-bold text-gray-800 mb-6">ð¨ï¸ Print & Export Utility</h2>
+            
+            <!-- Filter Controls -->
+            <div class="no-print p-6 mb-8 bg-indigo-50 rounded-xl shadow-inner border border-indigo-200">
+                <h3 class="text-xl font-semibold text-indigo-800 mb-4">Select Data Filters for Export</h3>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+
+                    <!-- Filter 1: Report Type -->
+                    <div>
+                        <label for="exportReportTypeSelect" class="block text-sm font-medium text-indigo-700 mb-1">
+                            Report Type (Multi-Select)
+                        </label>
+                        <select multiple id="exportReportTypeSelect" size="5" class="w-full rounded-md border-indigo-300 shadow-sm p-2 text-sm h-36 border">
+                            <!-- Options populated by JS -->
+                        </select>
+                    </div>
+
+                    <!-- Filter 2: Time Period -->
+                    <div>
+                        <label for="exportTimePeriodSelect" class="block text-sm font-medium text-indigo-700 mb-1">
+                            Time Period (Multi-Select)
+                        </label>
+                        <select multiple id="exportTimePeriodSelect" size="5" class="w-full rounded-md border-indigo-300 shadow-sm p-2 text-sm h-36 border">
+                            <!-- Options populated by JS -->
+                        </select>
+                    </div>
+
+                    <!-- Filter 3: Disease -->
+                    <div>
+                        <label for="exportDiseaseSelect" class="block text-sm font-medium text-indigo-700 mb-1">
+                            Disease Filter (Multi-Select)
+                        </label>
+                        <select multiple id="exportDiseaseSelect" size="5" class="w-full rounded-md border-indigo-300 shadow-sm p-2 text-sm h-36 border">
+                            <!-- Options populated by JS -->
+                        </select>
+                    </div>
+                </div>
+                <p class="mt-4 text-xs text-indigo-600">Hold down Ctrl (Windows) or Cmd (Mac) to select multiple items for the filter.</p>
+            </div>
+            
             <div class="grid grid-cols-1 md:grid-cols-3 gap-6 no-print">
 
                 <!-- 1. Print View Card -->
                 <div class="bg-white p-6 rounded-xl shadow-lg hover:shadow-xl transition duration-300 border border-gray-100 flex flex-col justify-between">
                     <div>
                         <h3 class="text-xl font-semibold text-gray-700 mb-2">Print Current View</h3>
-                        <p class="text-gray-500 mb-4 text-sm">Print the visible tab. The utility panel and navigation will be hidden.</p>
+                        <p class="text-gray-500 mb-4 text-sm">Print the visible tab. Filters will be used to log the intended data scope.</p>
                     </div>
                     <button onclick="printCurrentView()" class="w-full bg-indigo-600 text-white py-3 px-4 rounded-lg font-medium hover:bg-indigo-700 transition duration-150 shadow-md">
                         Print Page
@@ -148,8 +187,8 @@
                 <!-- 2. Export to PDF Card -->
                 <div class="bg-white p-6 rounded-xl shadow-lg hover:shadow-xl transition duration-300 border border-gray-100 flex flex-col justify-between">
                     <div>
-                        <h3 class="text-xl font-semibold text-gray-700 mb-2">Export Sample PDF</h3>
-                        <p class="text-gray-500 mb-4 text-sm">Generates a placeholder PDF document using sample data (jsPDF).</p>
+                        <h3 class="text-xl font-semibold text-gray-700 mb-2">Export Filtered PDF</h3>
+                        <p class="text-gray-500 mb-4 text-sm">Generates a placeholder PDF document including filter metadata (jsPDF).</p>
                     </div>
                     <button onclick="exportToPDF()" class="w-full bg-red-600 text-white py-3 px-4 rounded-lg font-medium hover:bg-red-700 transition duration-150 shadow-md">
                         Generate PDF
@@ -159,8 +198,8 @@
                 <!-- 3. Export to CSV Card -->
                 <div class="bg-white p-6 rounded-xl shadow-lg hover:shadow-xl transition duration-300 border border-gray-100 flex flex-col justify-between">
                     <div>
-                        <h3 class="text-xl font-semibold text-gray-700 mb-2">Export Sample CSV</h3>
-                        <p class="text-gray-500 mb-4 text-sm">Download sample health metrics in Comma Separated Values (CSV) format.</p>
+                        <h3 class="text-xl font-semibold text-gray-700 mb-2">Export Filtered CSV</h3>
+                        <p class="text-gray-500 mb-4 text-sm">Download sample health metrics CSV including filter selections.</p>
                     </div>
                     <button onclick="exportToCSV()" class="w-full bg-green-600 text-white py-3 px-4 rounded-lg font-medium hover:bg-green-700 transition duration-150 shadow-md">
                         Download CSV
@@ -168,7 +207,6 @@
                 </div>
             </div>
         </section>
-
     </div>
 
     <script src="app.js"></script>
