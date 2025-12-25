@@ -1397,18 +1397,33 @@ function renderTables(dataToRender) {
         table.className = "w-full border-collapse border border-gray-300 text-[10px] md:text-[11px] text-center table-fixed";
 
         // الرأس (Thead)
+        // let theadHTML = `
+        //         <thead>
+        //             <tr class="text-white bg-[#1a2b3c]">
+        //                 <th rowspan="2" class="border border-gray-500 p-1 align-middle w-32">EPSP / COMMUNE</th>
+        //                 ${AGE_GROUPS.map(g => `<th colspan="2" class="border border-gray-500 p-1">${g.label}</th>`).join('')}
+        //                 <th colspan="2" class="border border-gray-500 p-1 bg-[#fcd96d] text-black font-bold">TOTAL</th>
+        //                 <th rowspan="2" class="border border-gray-500 p-1 bg-[#fbc02d] text-black font-bold align-middle w-14">TOTAL<br>GEN</th>
+        //             </tr>
+        //             <tr class="text-white bg-[#1a2b3c]">
+        //                 ${AGE_GROUPS.map(() => `<th class="border border-gray-500 p-0.5">M</th><th class="border border-gray-500 p-0.5">F</th>`).join('')}
+        //                 <th class="border border-gray-500 p-1 bg-[#fcd96d] text-black font-bold">M</th>
+        //                 <th class="border border-gray-500 p-1 bg-[#fcd96d] text-black font-bold">F</th>
+        //             </tr>
+        //         </thead>
+        //     `;
         let theadHTML = `
                 <thead>
-                    <tr class="text-white bg-[#1a2b3c]">
+                    <tr class=" ">
                         <th rowspan="2" class="border border-gray-500 p-1 align-middle w-32">EPSP / COMMUNE</th>
                         ${AGE_GROUPS.map(g => `<th colspan="2" class="border border-gray-500 p-1">${g.label}</th>`).join('')}
-                        <th colspan="2" class="border border-gray-500 p-1 bg-[#fcd96d] text-black font-bold">TOTAL</th>
-                        <th rowspan="2" class="border border-gray-500 p-1 bg-[#fbc02d] text-black font-bold align-middle w-14">TOTAL<br>GEN</th>
+                        <th colspan="2" class="border border-gray-500 p-1  text-black font-bold">TOTAL</th>
+                        <th rowspan="2" class="border border-gray-500 p-1  text-black font-bold align-middle w-14">TOTAL<br>GEN</th>
                     </tr>
-                    <tr class="text-white bg-[#1a2b3c]">
+                    <tr class="">
                         ${AGE_GROUPS.map(() => `<th class="border border-gray-500 p-0.5">M</th><th class="border border-gray-500 p-0.5">F</th>`).join('')}
-                        <th class="border border-gray-500 p-1 bg-[#fcd96d] text-black font-bold">M</th>
-                        <th class="border border-gray-500 p-1 bg-[#fcd96d] text-black font-bold">F</th>
+                        <th class="border border-gray-500 p-1  text-black font-bold">M</th>
+                        <th class="border border-gray-500 p-1  text-black font-bold">F</th>
                     </tr>
                 </thead>
             `;
@@ -1444,18 +1459,18 @@ function renderTables(dataToRender) {
             const rowTotal = rowM + rowF;
             grandM += rowM; grandF += rowF; grandAll += rowTotal;
 
-            rowHTML += `<td class="border border-gray-300 p-1 bg-[#fcd96d] font-bold text-black">${rowM}</td>`;
-            rowHTML += `<td class="border border-gray-300 p-1 bg-[#fcd96d] font-bold text-black">${rowF}</td>`;
-            rowHTML += `<td class="border border-gray-300 p-1 bg-[#fbc02d] font-bold text-black">${rowTotal}</td>`;
+            rowHTML += `<td class="border border-gray-300 p-1  font-bold text-black">${rowM}</td>`; // bg-[#fcd96d]
+            rowHTML += `<td class="border border-gray-300 p-1  font-bold text-black">${rowF}</td>`; // bg-[#fcd96d]
+            rowHTML += `<td class="border border-gray-300 p-1  font-bold text-black">${rowTotal}</td>`; // bg-[#fbc02d]
             rowHTML += '</tr>';
             tbodyHTML += rowHTML;
         });
         tbodyHTML += '</tbody>';
 
-        // التذييل (Tfoot)
+        // التذييل (Tfoot) bg-[#d4a017] bg-[#b8860b]
         let tfootHTML = `
                 <tfoot>
-                    <tr class="bg-[#d4a017] text-black font-bold text-xs">
+                    <tr class=" text-black font-bold text-xs">
                         <td class="border border-[#b8860b] p-1">TOTAL</td>
                         ${AGE_GROUPS.map(g => `
                             <td class="border border-[#b8860b] p-1">${colTotals[`M_${g.key}`]}</td>
@@ -1463,7 +1478,7 @@ function renderTables(dataToRender) {
                         `).join('')}
                         <td class="border border-[#b8860b] p-1">${grandM}</td>
                         <td class="border border-[#b8860b] p-1">${grandF}</td>
-                        <td class="border border-[#b8860b] p-1 text-white bg-[#b8860b]">${grandAll}</td>
+                        <td class="border border-[#b8860b] p-1 text-green-900 ">${grandAll}</td> 
                     </tr>
                 </tfoot>
             `;
