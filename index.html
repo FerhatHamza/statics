@@ -10,7 +10,7 @@
   </head>
   <body class="min-h-screen p-4">
     <div class="max-w-7xl mx-auto bg-white p-6 rounded-xl shadow-2xl">
-      <header class="mb-6 border-b border-gray-200 pb-4">
+      <!-- <header class="mb-6 border-b border-gray-200 pb-4">
         <h1 class="text-3xl font-extrabold text-gray-900">
           Health Data Administration
         </h1>
@@ -21,6 +21,55 @@
             class="font-mono text-xs bg-gray-200 px-1 rounded"
           ></span>
         </p>
+        <div id="statusMessage" class="hidden mt-4"></div>
+      </header> -->
+
+      <header class="mb-6 border-b border-gray-200 pb-4">
+        <div class="flex justify-between items-start mb-4">
+          <div>
+            <h1 class="text-3xl font-extrabold text-gray-900">
+              Health Data Administration
+            </h1>
+            <p class="text-sm text-gray-500 mt-1">
+              Data Entry, Reporting, and Admin Tools for
+              <span
+                id="userIdDisplay"
+                class="font-mono text-xs bg-gray-200 px-1 rounded ml-1"
+              ></span>
+            </p>
+          </div>
+
+          <!-- User Info and Logout Button -->
+          <div class="flex items-center space-x-4">
+            <div class="text-right">
+              <div
+                class="text-sm font-medium text-gray-700"
+                id="usernameDisplay"
+              ></div>
+              <div class="text-xs text-gray-500" id="userRole">Agent</div>
+            </div>
+            <button
+              id="logoutButton"
+              class="px-4 py-2 bg-red-50 text-red-700 text-sm font-medium rounded-lg border border-red-200 hover:bg-red-100 hover:border-red-300 transition-colors flex items-center"
+            >
+              <svg
+                class="w-4 h-4 mr-2"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"
+                ></path>
+              </svg>
+              Logout
+            </button>
+          </div>
+        </div>
+
         <div id="statusMessage" class="hidden mt-4"></div>
       </header>
 

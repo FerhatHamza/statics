@@ -1,10 +1,31 @@
 // --- Configuration and Global State ---
+// Check if already logged in
+const token = localStorage.getItem("auth_token");
+const expiresAt = localStorage.getItem("token_expires");
+
+if (token && expiresAt) {
+    const now = new Date();
+    const expiryDate = new Date(expiresAt);
+
+    if (now > expiryDate) {
+        // Already logged in, redirect to app
+        window.location.href = "Login.html";
+    }
+} else {
+    // No token, ensure storage is clear
+    window.location.href = "Login.html";
+    localStorage.clear();
+}
+
+
+
 
 // FIX: Changed from a relative path to the absolute URL of the deployed Worker API
 const API_BASE_URL = 'https://mehidistatics-api.ferhathamza17.workers.dev/api/v1';
+const userId = localStorage.getItem('user_id');
 
 // This simulates the user authentication ID provided by the environment
-const userId = typeof __app_id !== 'undefined' ? `user-${__app_id}` : 'guest-user-1234';
+// const userId = typeof __app_id !== 'undefined' ? `user-${__app_id}` : 'guest-user-1234';
 
 // Global data stores
 window.allMonthlyData = {};
@@ -22,34 +43,114 @@ const REPORT_PERIODS = {
 
 // --- Utility Functions ---
 
+
+const logout = document.getElementById('logoutButton');
+logout.addEventListener('click', async () => {
+    // localStorage.clear();
+    // window.location.href = 'Login.html';
+    const result = await makeApiCall('/logout', 'POST', { userId }); // Notify server of logout
+
+});
+
+
 /**
  * Generic helper to make API calls to the Worker
  */
+// async function makeApiCall(endpoint, method = 'GET', data = null) {
+//     //console.log(`Making API Call: ${method} ${endpoint} with data:`, data);
+//     // Construct the full URL using the absolute worker domain
+//     const url = `${API_BASE_URL}/user/${userId}${endpoint}`;
+//     const options = {
+//         method: method,
+//         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+//     };
+//     if (data) {
+//         options.body = JSON.stringify(data);
+//     }
+
+//     try {
+//         const response = await fetch(url, options);
+//         return await response.json();
+//     } catch (error) {
+//         console.error("API Call Error:", error);
+//         document.getElementById('statusMessage').textContent = `API Error: ${error.message}. Check Worker deployment and URL: ${url}`;
+//         document.getElementById('statusMessage').className = "mb-4 p-3 rounded-lg text-sm bg-red-100 text-red-700";
+//         document.getElementById('statusMessage').style.display = 'block';
+//         return null;
+//     }
+// }
+
+
 async function makeApiCall(endpoint, method = 'GET', data = null) {
-    //console.log(`Making API Call: ${method} ${endpoint} with data:`, data);
-    // Construct the full URL using the absolute worker domain
-    const url = `${API_BASE_URL}/user/${userId}${endpoint}`;
+    // الحصول على userId و token من localStorage أو أي مكان تخزين
+    const userId = localStorage.getItem('user_id');
+    const token = localStorage.getItem('auth_token');
+    console.log(token);
+
+    // التحقق من وجود userId و token
+    if (!userId || !token) {
+        console.error("User ID or Token is missing");
+        showErrorMessage("Please login first");
+        return null;
+    }
+
+    // بناء URL بشكل صحيح
+    const url = `${API_BASE_URL}${endpoint}`;
+
+    // إنشاء options مع تحسينات
     const options = {
-        method: method,
-        headers: { 'Content-Type': 'application/json' },
+        method: method.toUpperCase(),
+        headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+        },
     };
-    if (data) {
+
+    // إضافة body فقط إذا كان هناك بيانات AND الطريقة تستحق body
+    if (data && ['POST', 'PUT', 'PATCH', 'DELETE'].includes(method.toUpperCase())) {
         options.body = JSON.stringify(data);
     }
 
+    // إضافة credentials إذا لزم الأمر (للتطوير المحلي)
+    if (API_BASE_URL.includes('localhost')) {
+        options.credentials = 'include';
+    }
+
+    console.log(`Making API Call: ${method} ${url}`, data ? `with data:` : '', data || '');
+
     try {
         const response = await fetch(url, options);
-        //console.log(`API Response from ${url}:`, response);
-        return await response.json();
+
+        // التحقق من حالة الاستجابة
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+
+        // التحقق من نوع المحتوى
+        const contentType = response.headers.get('content-type');
+        if (contentType && contentType.includes('application/json')) {
+            return await response.json();
+        } else {
+            return await response.text();
+        }
+
     } catch (error) {
         console.error("API Call Error:", error);
-        document.getElementById('statusMessage').textContent = `API Error: ${error.message}. Check Worker deployment and URL: ${url}`;
-        document.getElementById('statusMessage').className = "mb-4 p-3 rounded-lg text-sm bg-red-100 text-red-700";
-        document.getElementById('statusMessage').style.display = 'block';
+        showErrorMessage(`API Error: ${error.message}. Check Worker deployment and URL: ${url}`);
         return null;
     }
 }
 
+function showErrorMessage(message) {
+    const statusElement = document.getElementById('statusMessage');
+    if (statusElement) {
+        statusElement.textContent = message;
+        statusElement.className = "mb-4 p-3 rounded-lg text-sm bg-red-100 text-red-700";
+        statusElement.style.display = 'block';
+    } else {
+        console.error(message);
+    }
+}
 
 // --- Initialization ---
 
@@ -95,7 +196,7 @@ window.onload = async function () {
  * Loads configuration lists (Diseases, Locations) from the Worker.
  */
 window.loadConfigAndRerender = async function () {
-    const result = await makeApiCall('/config');
+    const result = await makeApiCall('/user/config');
     if (!result || result.error) return;
 
     const config = result.data;
@@ -160,7 +261,7 @@ window.listenForEntryDataChanges = async function () {
 
     if (!monthId || !diseaseId) return;
 
-    const endpoint = `/report/${diseaseId}/${monthId}`;
+    const endpoint = `/user/report/${diseaseId}/${monthId}`;
     const result = await makeApiCall(endpoint);
 
     //console.log("Fetched entry data: 164", result);
@@ -204,7 +305,7 @@ window.saveEntry = async function () {
     saveButton.textContent = "Saving...";
 
     try {
-        const result = await makeApiCall('/report', 'POST', payload);
+        const result = await makeApiCall('/user/report', 'POST', payload);
         if (result && result.success) {
             document.getElementById('statusMessage').textContent = `Report for ${diseaseId.replace(/_/g, ' ')} - ${monthId} saved successfully!`;
             document.getElementById('statusMessage').className = "mb-4 p-3 rounded-lg text-sm bg-green-100 text-green-700";
@@ -233,7 +334,7 @@ window.fetchAllMonthlyData = async function () {
     document.getElementById('statusMessage').className = "mb-4 p-3 rounded-lg text-sm bg-gray-200 text-gray-700";
     document.getElementById('statusMessage').style.display = 'block';
 
-    const data = await makeApiCall('/reports');
+    const data = await makeApiCall('/user/reports');
     //console.log("Fetched all monthly data for reporting 235:", data);
 
     if (data && !data.error) {
@@ -1662,7 +1763,7 @@ window.saveConfig = async function () {
     };
 
     try {
-        const result = await makeApiCall('/config', 'POST', payload);
+        const result = await makeApiCall('/user/config', 'POST', payload);
         if (result && result.success) {
             document.getElementById('statusMessage').textContent = "Configuration saved successfully!";
             document.getElementById('statusMessage').className = "mb-4 p-3 rounded-lg text-sm bg-green-100 text-green-700";
